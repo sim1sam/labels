@@ -49,6 +49,13 @@ class ParcelController extends Controller
             'notes' => 'nullable|string',
         ]);
 
+        // Automatically create or update customer
+        \App\Models\Customer::findOrCreate(
+            $request->customer_name,
+            $request->mobile_number,
+            $request->delivery_address
+        );
+
         $parcel = Parcel::create([
             'parcel_id' => Parcel::generateParcelId(),
             'merchant_id' => $request->merchant_id,
@@ -232,6 +239,13 @@ class ParcelController extends Controller
                     }
                     $courierId = $courier->id;
                 }
+
+                // Automatically create or update customer
+                \App\Models\Customer::findOrCreate(
+                    $customerName,
+                    $mobileNumber,
+                    $deliveryAddress
+                );
 
                 // Create parcel
                 Parcel::create([

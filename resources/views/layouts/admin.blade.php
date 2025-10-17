@@ -446,6 +446,12 @@
                 </a>
             </div>
             <div class="nav-item">
+                <a href="{{ route('admin.customers.index') }}" class="nav-link {{ request()->is('admin/customers*') ? 'active' : '' }}">
+                    <i class="fas fa-users"></i>
+                    Customers
+                </a>
+            </div>
+            <div class="nav-item">
                 <a href="{{ route('admin.reports.printed-parcels') }}" class="nav-link {{ request()->routeIs('admin.reports.*') ? 'active' : '' }}">
                     <i class="fas fa-chart-bar"></i>
                     Reports

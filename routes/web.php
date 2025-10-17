@@ -52,6 +52,9 @@ Route::middleware(['auth', 'role:admin'])->group(function () {
     // API route for getting couriers by merchant
     Route::get('admin/parcels/couriers-by-merchant', [App\Http\Controllers\ParcelController::class, 'getCouriersByMerchant'])->middleware('auth');
     
+    // API route for getting customer data by mobile number
+    Route::get('admin/customers/by-mobile/{mobile}', [App\Http\Controllers\CustomerController::class, 'getByMobile'])->middleware('auth');
+    
     // Parcel label generation
     Route::get('admin/parcels/{parcel}/label', [App\Http\Controllers\ParcelController::class, 'generateLabel'])->name('admin.parcels.label');
     
@@ -74,6 +77,17 @@ Route::middleware(['auth', 'role:admin'])->group(function () {
     // Settings
     Route::get('admin/settings', [App\Http\Controllers\SettingsController::class, 'index'])->name('admin.settings');
     Route::put('admin/settings', [App\Http\Controllers\SettingsController::class, 'update'])->name('admin.settings.update');
+    
+    // Customer Management
+    Route::resource('admin/customers', App\Http\Controllers\CustomerController::class)->names([
+        'index' => 'admin.customers.index',
+        'create' => 'admin.customers.create',
+        'store' => 'admin.customers.store',
+        'show' => 'admin.customers.show',
+        'edit' => 'admin.customers.edit',
+        'update' => 'admin.customers.update',
+        'destroy' => 'admin.customers.destroy'
+    ]);
 });
 
 // Merchant only routes

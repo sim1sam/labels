@@ -68,6 +68,13 @@ class MerchantParcelController extends Controller
             }
         }
 
+        // Automatically create or update customer
+        \App\Models\Customer::findOrCreate(
+            $request->customer_name,
+            $request->mobile_number,
+            $request->delivery_address
+        );
+
         Parcel::create([
             'parcel_id' => Parcel::generateParcelId(),
             'merchant_id' => $merchant->id,
