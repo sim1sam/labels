@@ -8,32 +8,32 @@
 <div class="stats-grid">
     <div class="stat-card">
         <div class="stat-header">
-            <div class="stat-icon users">
-                <i class="fas fa-users"></i>
+            <div class="stat-icon couriers">
+                <i class="fas fa-motorcycle"></i>
             </div>
         </div>
-        <div class="stat-value">{{ $totalUsers ?? 0 }}</div>
-        <div class="stat-label">Total Users</div>
+        <div class="stat-value">{{ $totalCouriers ?? 0 }}</div>
+        <div class="stat-label">Total Couriers</div>
     </div>
 
     <div class="stat-card">
         <div class="stat-header">
-            <div class="stat-icon orders">
+            <div class="stat-icon merchants">
+                <i class="fas fa-store"></i>
+            </div>
+        </div>
+        <div class="stat-value">{{ $totalMerchants ?? 0 }}</div>
+        <div class="stat-label">Total Merchants</div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-header">
+            <div class="stat-icon parcels">
                 <i class="fas fa-box"></i>
             </div>
         </div>
-        <div class="stat-value">{{ $totalOrders ?? 0 }}</div>
-        <div class="stat-label">Total Orders</div>
-    </div>
-
-    <div class="stat-card">
-        <div class="stat-header">
-            <div class="stat-icon deliveries">
-                <i class="fas fa-truck"></i>
-            </div>
-        </div>
-        <div class="stat-value">{{ $totalDeliveries ?? 0 }}</div>
-        <div class="stat-label">Active Deliveries</div>
+        <div class="stat-value">{{ $totalParcels ?? 0 }}</div>
+        <div class="stat-label">Total Parcels</div>
     </div>
 
     <div class="stat-card">
@@ -47,12 +47,12 @@
     </div>
 </div>
 
-<!-- Recent Activity -->
+<!-- Recent Parcels -->
 <div class="card">
     <div class="card-header">
         <h3 class="card-title">
             <i class="fas fa-clock"></i>
-            Recent Activity
+            Recent Parcels
         </h3>
     </div>
     <div class="card-body">
@@ -60,61 +60,58 @@
             <table class="table">
                 <thead>
                     <tr>
-                        <th>User</th>
-                        <th>Action</th>
-                        <th>Time</th>
+                        <th>Parcel ID</th>
+                        <th>Customer</th>
+                        <th>Merchant</th>
+                        <th>Amount</th>
                         <th>Status</th>
+                        <th>Created</th>
                     </tr>
                 </thead>
                 <tbody>
+                    @forelse($recentParcels ?? [] as $parcel)
                     <tr>
+                        <td style="font-weight: 600; color: #2d3748;">{{ $parcel->parcel_id }}</td>
                         <td>
-                            <div style="display: flex; align-items: center; gap: 10px;">
-                                <div class="user-avatar" style="width: 30px; height: 30px; font-size: 12px;">
-                                    M
-                                </div>
-                                <div>
-                                    <div style="font-weight: 600;">Merchant User</div>
-                                    <div style="font-size: 12px; color: #718096;">merchant@example.com</div>
-                                </div>
+                            <div>
+                                <div style="font-weight: 600;">{{ $parcel->customer_name }}</div>
+                                <div style="font-size: 12px; color: #718096;">{{ $parcel->mobile_number }}</div>
                             </div>
                         </td>
-                        <td>Created new order</td>
-                        <td>2 minutes ago</td>
-                        <td><span class="badge badge-success">Completed</span></td>
-                    </tr>
-                    <tr>
+                        <td>{{ $parcel->merchant->shop_name ?? 'N/A' }}</td>
+                        <td style="font-weight: 600; color: #2d3748;">{{ number_format($parcel->cod_amount, 0) }} {{ \App\Models\Setting::getCurrency() }}</td>
                         <td>
-                            <div style="display: flex; align-items: center; gap: 10px;">
-                                <div class="user-avatar" style="width: 30px; height: 30px; font-size: 12px;">
-                                    A
-                                </div>
-                                <div>
-                                    <div style="font-weight: 600;">Admin User</div>
-                                    <div style="font-size: 12px; color: #718096;">admin@example.com</div>
-                                </div>
-                            </div>
+                            @php
+                                $badgeColors = [
+                                    'pending' => '#fef5e7',
+                                    'assigned' => '#e6f3ff',
+                                    'picked_up' => '#f0fff4',
+                                    'in_transit' => '#e6fffa',
+                                    'delivered' => '#f0fff4',
+                                    'failed' => '#fed7d7'
+                                ];
+                                $textColors = [
+                                    'pending' => '#744210',
+                                    'assigned' => '#2c5282',
+                                    'picked_up' => '#22543d',
+                                    'in_transit' => '#234e52',
+                                    'delivered' => '#22543d',
+                                    'failed' => '#742a2a'
+                                ];
+                            @endphp
+                            <span style="background: {{ $badgeColors[$parcel->status] ?? '#f7fafc' }}; color: {{ $textColors[$parcel->status] ?? '#4a5568' }}; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 600;">
+                                {{ $parcel->getStatusDisplayText() }}
+                            </span>
                         </td>
-                        <td>Updated system settings</td>
-                        <td>15 minutes ago</td>
-                        <td><span class="badge badge-info">Updated</span></td>
+                        <td style="color: #718096; font-size: 14px;">{{ $parcel->created_at->diffForHumans() }}</td>
                     </tr>
+                    @empty
                     <tr>
-                        <td>
-                            <div style="display: flex; align-items: center; gap: 10px;">
-                                <div class="user-avatar" style="width: 30px; height: 30px; font-size: 12px;">
-                                    M
-                                </div>
-                                <div>
-                                    <div style="font-weight: 600;">Merchant User</div>
-                                    <div style="font-size: 12px; color: #718096;">merchant@example.com</div>
-                                </div>
-                            </div>
+                        <td colspan="6" style="text-align: center; color: #718096; padding: 20px;">
+                            No recent parcels found
                         </td>
-                        <td>Requested delivery pickup</td>
-                        <td>1 hour ago</td>
-                        <td><span class="badge badge-warning">Pending</span></td>
                     </tr>
+                    @endforelse
                 </tbody>
             </table>
         </div>
@@ -131,19 +128,19 @@
     </div>
     <div class="card-body">
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
-            <a href="/admin/users" class="btn btn-primary">
-                <i class="fas fa-user-plus"></i>
-                Add New User
+            <a href="{{ route('admin.couriers.create') }}" class="btn btn-primary">
+                <i class="fas fa-motorcycle"></i>
+                Add New Courier
             </a>
-            <a href="/admin/orders" class="btn btn-success">
-                <i class="fas fa-plus"></i>
-                Create Order
+            <a href="{{ route('admin.merchants.create') }}" class="btn btn-success">
+                <i class="fas fa-store"></i>
+                Add New Merchant
             </a>
-            <a href="/admin/deliveries" class="btn btn-primary">
-                <i class="fas fa-truck"></i>
-                Assign Delivery
+            <a href="{{ route('admin.parcels.create') }}" class="btn btn-primary">
+                <i class="fas fa-box"></i>
+                Create Parcel
             </a>
-            <a href="/admin/reports" class="btn btn-success">
+            <a href="{{ route('admin.reports.printed-parcels') }}" class="btn btn-success">
                 <i class="fas fa-chart-line"></i>
                 View Reports
             </a>

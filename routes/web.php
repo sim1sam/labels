@@ -15,11 +15,6 @@ Route::post('/logout', [App\Http\Controllers\AuthController::class, 'logout'])->
 // Admin only routes
 Route::middleware(['auth', 'role:admin'])->group(function () {
     Route::get('/admin/dashboard', [App\Http\Controllers\AdminController::class, 'dashboard'])->name('admin.dashboard');
-    Route::get('/admin/users', [App\Http\Controllers\AdminController::class, 'users']);
-    Route::get('/admin/orders', [App\Http\Controllers\AdminController::class, 'orders']);
-    Route::get('/admin/deliveries', [App\Http\Controllers\AdminController::class, 'deliveries']);
-    Route::get('/admin/reports', [App\Http\Controllers\AdminController::class, 'reports']);
-    Route::get('/admin/settings', [App\Http\Controllers\AdminController::class, 'settings']);
     
     // Courier Management
     Route::resource('admin/couriers', App\Http\Controllers\CourierController::class)->names([

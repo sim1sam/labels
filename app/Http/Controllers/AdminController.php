@@ -10,22 +10,25 @@ class AdminController extends Controller
     public function dashboard()
     {
         // Get dashboard statistics
-        $totalUsers = User::count();
-        $totalAdmins = User::where('user_type', 'admin')->count();
-        $totalMerchants = User::where('user_type', 'merchant')->count();
+        $totalCouriers = \App\Models\Courier::count();
+        $totalMerchants = \App\Models\Merchant::count();
+        $totalParcels = \App\Models\Parcel::count();
         
-        // Mock data for demo purposes
-        $totalOrders = 156;
-        $totalDeliveries = 89;
-        $totalRevenue = 12500.50;
+        // Calculate total revenue from parcels
+        $totalRevenue = \App\Models\Parcel::sum('cod_amount');
+        
+        // Get recent parcels
+        $recentParcels = \App\Models\Parcel::with(['merchant', 'courier'])
+            ->orderBy('created_at', 'desc')
+            ->limit(5)
+            ->get();
         
         return view('admin.dashboard', compact(
-            'totalUsers',
-            'totalAdmins', 
+            'totalCouriers',
             'totalMerchants',
-            'totalOrders',
-            'totalDeliveries',
-            'totalRevenue'
+            'totalParcels',
+            'totalRevenue',
+            'recentParcels'
         ));
     }
 

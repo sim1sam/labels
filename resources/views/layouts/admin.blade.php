@@ -428,24 +428,6 @@
                 </a>
             </div>
             <div class="nav-item">
-                <a href="/admin/users" class="nav-link {{ request()->is('admin/users*') ? 'active' : '' }}">
-                    <i class="fas fa-users"></i>
-                    Users
-                </a>
-            </div>
-            <div class="nav-item">
-                <a href="/admin/orders" class="nav-link {{ request()->is('admin/orders*') ? 'active' : '' }}">
-                    <i class="fas fa-box"></i>
-                    Orders
-                </a>
-            </div>
-            <div class="nav-item">
-                <a href="/admin/deliveries" class="nav-link {{ request()->is('admin/deliveries*') ? 'active' : '' }}">
-                    <i class="fas fa-truck"></i>
-                    Deliveries
-                </a>
-            </div>
-            <div class="nav-item">
                 <a href="{{ route('admin.couriers.index') }}" class="nav-link {{ request()->is('admin/couriers*') ? 'active' : '' }}">
                     <i class="fas fa-motorcycle"></i>
                     Couriers
