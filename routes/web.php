@@ -112,6 +112,8 @@ Route::middleware(['auth', 'role:merchant'])->group(function () {
     ]);
     
     // Reports
+    Route::get('merchant/reports', [App\Http\Controllers\ReportController::class, 'merchantReports'])->name('merchant.reports.index');
+    Route::get('merchant/reports/download', [App\Http\Controllers\ReportController::class, 'downloadMerchantReports'])->name('merchant.reports.download');
     Route::get('merchant/reports/printed-parcels', [App\Http\Controllers\ReportController::class, 'merchantPrintedParcels'])->name('merchant.reports.printed-parcels');
     Route::get('merchant/reports/printed-parcels/download', [App\Http\Controllers\ReportController::class, 'downloadMerchantPrintedParcels'])->name('merchant.reports.printed-parcels.download');
 });

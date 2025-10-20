@@ -227,6 +227,14 @@
                                 </td>
                                 <td style="padding: 15px; text-align: center;">
                                     <div style="display: flex; gap: 8px; justify-content: center; align-items: center; flex-wrap: wrap;">
+                                        @if($parcel->courier && $parcel->courier->hasApiIntegration())
+                                            <button onclick="showLiveTracking({{ $parcel->id }})" 
+                                                    style="background: #38a169; color: white; padding: 6px 12px; border: none; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center;">
+                                                <i class="fas fa-shipping-fast" style="margin-right: 4px;"></i>
+                                                Live Track
+                                            </button>
+                                        @endif
+                                        
                                         <!-- Quick Status Change -->
                                         <form action="{{ route('admin.parcels.update', $parcel) }}" method="POST" style="display: inline;" onsubmit="return confirm('Are you sure you want to change the status?')">
                                             @csrf
@@ -385,6 +393,338 @@ document.getElementById('bulk-status-form').addEventListener('submit', function(
     const statusText = status.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
     if (!confirm(`Are you sure you want to update ${checkedBoxes.length} parcel(s) to "${statusText}" status?`)) {
         e.preventDefault();
+    }
+});
+</script>
+
+<!-- Live Tracking Modal -->
+<div id="trackingModal" style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5);">
+    <div style="background-color: white; margin: 5% auto; padding: 0; border-radius: 12px; width: 90%; max-width: 800px; max-height: 80vh; overflow-y: auto; box-shadow: 0 10px 30px rgba(0,0,0,0.3);">
+        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 12px 12px 0 0; display: flex; justify-content: space-between; align-items: center;">
+            <h3 style="margin: 0; font-size: 20px; font-weight: 600;">
+                <i class="fas fa-shipping-fast" style="margin-right: 10px;"></i>
+                Live Tracking Status
+            </h3>
+            <button onclick="closeTrackingModal()" style="background: none; border: none; color: white; font-size: 24px; cursor: pointer; padding: 0; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; border-radius: 50%; transition: background-color 0.3s;" onmouseover="this.style.backgroundColor='rgba(255,255,255,0.2)'" onmouseout="this.style.backgroundColor='transparent'">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        
+        <div id="trackingContent" style="padding: 30px;">
+            <!-- Loading State -->
+            <div id="trackingLoading" style="text-align: center; padding: 40px;">
+                <div style="display: inline-block; width: 40px; height: 40px; border: 4px solid #f3f3f3; border-top: 4px solid #667eea; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                <p style="margin-top: 20px; color: #666; font-size: 16px;">Loading tracking information...</p>
+            </div>
+            
+            <!-- Error State -->
+            <div id="trackingError" style="display: none; text-align: center; padding: 40px;">
+                <i class="fas fa-exclamation-triangle" style="font-size: 48px; color: #e53e3e; margin-bottom: 20px;"></i>
+                <h3 style="color: #e53e3e; margin-bottom: 10px;">Tracking Unavailable</h3>
+                <p id="trackingErrorMessage" style="color: #666; margin-bottom: 20px;"></p>
+                <button onclick="retryTracking()" style="background: #667eea; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: 600;">
+                    <i class="fas fa-redo" style="margin-right: 8px;"></i>
+                    Try Again
+                </button>
+            </div>
+            
+            <!-- Success State -->
+            <div id="trackingSuccess" style="display: none;">
+                <!-- Current Status -->
+                <div style="background: #f7fafc; padding: 20px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #38a169;">
+                    <div style="display: flex; align-items: center; margin-bottom: 10px;">
+                        <i class="fas fa-map-marker-alt" style="color: #38a169; margin-right: 10px; font-size: 18px;"></i>
+                        <h4 style="margin: 0; color: #2d3748; font-size: 18px;">Current Status</h4>
+                    </div>
+                    <div id="currentStatus" style="font-size: 16px; color: #4a5568;"></div>
+                </div>
+                
+                <!-- Tracking Details -->
+                <div style="background: #f7fafc; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                    <h4 style="margin: 0 0 15px 0; color: #2d3748; font-size: 16px; display: flex; align-items: center;">
+                        <i class="fas fa-info-circle" style="color: #4299e1; margin-right: 8px;"></i>
+                        Tracking Details
+                    </h4>
+                    <div id="trackingDetails" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; font-size: 14px;"></div>
+                </div>
+                
+                <!-- Tracking History -->
+                <div style="background: #f7fafc; padding: 20px; border-radius: 8px;">
+                    <h4 style="margin: 0 0 15px 0; color: #2d3748; font-size: 16px; display: flex; align-items: center;">
+                        <i class="fas fa-history" style="color: #ed8936; margin-right: 8px;"></i>
+                        Tracking History
+                    </h4>
+                    <div id="trackingHistory" style="space-y: 10px;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.tracking-history-item {
+    display: flex; 
+    align-items: center; 
+    padding: 15px; 
+    background: white; 
+    border-radius: 8px; 
+    margin-bottom: 10px; 
+    border-left: 4px solid #e2e8f0;
+    transition: all 0.3s ease;
+}
+
+.tracking-history-item:hover {
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    transform: translateX(5px);
+}
+
+.tracking-history-item.delivered {
+    border-left-color: #38a169;
+}
+
+.tracking-history-item.in_transit {
+    border-left-color: #4299e1;
+}
+
+.tracking-history-item.picked_up {
+    border-left-color: #ed8936;
+}
+
+.tracking-history-item.pending {
+    border-left-color: #a0aec0;
+}
+
+.tracking-status-icon {
+    width: 40px; 
+    height: 40px; 
+    border-radius: 50%; 
+    display: flex; 
+    align-items: center; 
+    justify-content: center; 
+    margin-right: 15px; 
+    font-size: 16px; 
+    color: white;
+}
+
+.tracking-status-icon.delivered {
+    background: #38a169;
+}
+
+.tracking-status-icon.in_transit {
+    background: #4299e1;
+}
+
+.tracking-status-icon.picked_up {
+    background: #ed8936;
+}
+
+.tracking-status-icon.pending {
+    background: #a0aec0;
+}
+
+.tracking-history-content {
+    flex: 1;
+}
+
+.tracking-history-status {
+    font-weight: 600; 
+    color: #2d3748; 
+    margin-bottom: 4px;
+}
+
+.tracking-history-location {
+    color: #4a5568; 
+    font-size: 14px; 
+    margin-bottom: 2px;
+}
+
+.tracking-history-date {
+    color: #718096; 
+    font-size: 12px;
+}
+
+.tracking-history-notes {
+    color: #4a5568; 
+    font-size: 13px; 
+    font-style: italic; 
+    margin-top: 4px;
+}
+</style>
+
+<script>
+let currentParcelId = null;
+
+function showLiveTracking(parcelId) {
+    currentParcelId = parcelId;
+    document.getElementById('trackingModal').style.display = 'block';
+    document.body.style.overflow = 'hidden';
+    
+    // Reset modal state
+    document.getElementById('trackingLoading').style.display = 'block';
+    document.getElementById('trackingError').style.display = 'none';
+    document.getElementById('trackingSuccess').style.display = 'none';
+    
+    // Fetch tracking data
+    fetchTrackingData(parcelId);
+}
+
+function closeTrackingModal() {
+    document.getElementById('trackingModal').style.display = 'none';
+    document.body.style.overflow = 'auto';
+    currentParcelId = null;
+}
+
+function retryTracking() {
+    if (currentParcelId) {
+        fetchTrackingData(currentParcelId);
+    }
+}
+
+function fetchTrackingData(parcelId) {
+    // Show loading state
+    document.getElementById('trackingLoading').style.display = 'block';
+    document.getElementById('trackingError').style.display = 'none';
+    document.getElementById('trackingSuccess').style.display = 'none';
+    
+    fetch(`/api/live-tracking/${parcelId}`, {
+        method: 'GET',
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => {
+        // Check if response is JSON
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+            throw new Error('Server returned HTML instead of JSON. Check if the API endpoint exists.');
+        }
+        return response.json();
+    })
+    .then(data => {
+        document.getElementById('trackingLoading').style.display = 'none';
+        
+        if (data.success) {
+            displayTrackingData(data.data);
+        } else {
+            showTrackingError(data.message || 'Failed to get tracking information');
+        }
+    })
+    .catch(error => {
+        document.getElementById('trackingLoading').style.display = 'none';
+        console.error('Tracking error:', error);
+        
+        if (error.message.includes('HTML instead of JSON')) {
+            showTrackingError('API endpoint not found. Please check the route configuration.');
+        } else {
+            showTrackingError('Failed to fetch tracking information. Please try again.');
+        }
+    });
+}
+
+function displayTrackingData(data) {
+    document.getElementById('trackingSuccess').style.display = 'block';
+    
+    // Display current status
+    const statusColors = {
+        'delivered': '#38a169',
+        'in_transit': '#4299e1', 
+        'picked_up': '#ed8936',
+        'pending': '#a0aec0'
+    };
+    
+    const statusText = data.status_text || data.status || 'Unknown';
+    const statusColor = statusColors[data.status] || '#a0aec0';
+    
+    document.getElementById('currentStatus').innerHTML = `
+        <div style="display: flex; align-items: center; margin-bottom: 10px;">
+            <div style="width: 12px; height: 12px; background: ${statusColor}; border-radius: 50%; margin-right: 10px;"></div>
+            <span style="font-weight: 600; color: ${statusColor}; font-size: 18px;">${statusText}</span>
+        </div>
+        ${data.current_location ? `<div style="color: #4a5568;"><i class="fas fa-map-marker-alt" style="margin-right: 8px;"></i>${data.current_location}</div>` : ''}
+    `;
+    
+    // Display tracking details
+    const details = [];
+    if (data.tracking_code) details.push({label: 'Tracking Code', value: data.tracking_code});
+    if (data.delivery_date) details.push({label: 'Delivery Date', value: new Date(data.delivery_date).toLocaleString()});
+    if (data.delivery_attempts) details.push({label: 'Delivery Attempts', value: data.delivery_attempts});
+    if (data.delivery_notes) details.push({label: 'Delivery Notes', value: data.delivery_notes});
+    
+    const detailsHtml = details.map(detail => `
+        <div style="background: white; padding: 10px; border-radius: 6px;">
+            <div style="font-weight: 600; color: #2d3748; margin-bottom: 4px;">${detail.label}</div>
+            <div style="color: #4a5568;">${detail.value}</div>
+        </div>
+    `).join('');
+    
+    document.getElementById('trackingDetails').innerHTML = detailsHtml;
+    
+    // Display tracking history
+    if (data.tracking_history && data.tracking_history.length > 0) {
+        const historyHtml = data.tracking_history.map(item => `
+            <div class="tracking-history-item ${item.status}">
+                <div class="tracking-status-icon ${item.status}">
+                    <i class="fas fa-${getStatusIcon(item.status)}"></i>
+                </div>
+                <div class="tracking-history-content">
+                    <div class="tracking-history-status">${item.status_text || item.status}</div>
+                    <div class="tracking-history-location">
+                        <i class="fas fa-map-marker-alt" style="margin-right: 6px;"></i>${item.location || 'Unknown Location'}
+                    </div>
+                    <div class="tracking-history-date">
+                        <i class="fas fa-clock" style="margin-right: 6px;"></i>${new Date(item.date).toLocaleString()}
+                    </div>
+                    ${item.notes ? `<div class="tracking-history-notes">${item.notes}</div>` : ''}
+                </div>
+            </div>
+        `).join('');
+        
+        document.getElementById('trackingHistory').innerHTML = historyHtml;
+    } else {
+        document.getElementById('trackingHistory').innerHTML = `
+            <div style="text-align: center; padding: 20px; color: #718096;">
+                <i class="fas fa-history" style="font-size: 24px; margin-bottom: 10px; opacity: 0.5;"></i>
+                <p>No tracking history available</p>
+            </div>
+        `;
+    }
+}
+
+function showTrackingError(message) {
+    document.getElementById('trackingError').style.display = 'block';
+    document.getElementById('trackingErrorMessage').textContent = message;
+}
+
+function getStatusIcon(status) {
+    const icons = {
+        'delivered': 'check-circle',
+        'in_transit': 'truck',
+        'picked_up': 'hand-holding',
+        'pending': 'clock'
+    };
+    return icons[status] || 'circle';
+}
+
+// Close modal when clicking outside
+window.onclick = function(event) {
+    const modal = document.getElementById('trackingModal');
+    if (event.target === modal) {
+        closeTrackingModal();
+    }
+}
+
+// Close modal with Escape key
+document.addEventListener('keydown', function(event) {
+    if (event.key === 'Escape') {
+        closeTrackingModal();
     }
 });
 </script>

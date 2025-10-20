@@ -24,45 +24,60 @@ class CourierApiService
             ];
         }
 
+        // Check if this is a Steadfast courier
+        if (strtolower($courier->courier_name) === 'steadfast' || strtolower($courier->courier_name) === 'steadfast courier') {
+            return $this->getSteadfastTracking($parcel, $courier);
+        }
+
+        // For other couriers, return a message that tracking is not implemented
+        return [
+            'success' => false,
+            'message' => 'Live tracking is not yet implemented for ' . $courier->courier_name . ' courier',
+            'data' => null
+        ];
+    }
+
+    /**
+     * Get Steadfast tracking information
+     */
+    private function getSteadfastTracking(Parcel $parcel, Courier $courier): array
+    {
         try {
             $credentials = $courier->getMerchantApiCredentials($parcel->merchant_id);
             
-            $response = Http::withHeaders([
-                'Authorization' => 'Bearer ' . $credentials['api_key'],
-                'Content-Type' => 'application/json',
-            ])->timeout(30)->get($courier->api_endpoint . '/tracking', [
-                'tracking_number' => $parcel->tracking_number,
-                'merchant_id' => $parcel->merchant_id,
-            ]);
-
-            if ($response->successful()) {
-                $data = $response->json();
-                
-                // Update parcel with latest tracking info
-                $this->updateParcelTracking($parcel, $data);
-                
-                return [
-                    'success' => true,
-                    'message' => 'Tracking information retrieved successfully',
-                    'data' => $data
-                ];
-            } else {
+            if (empty($credentials['api_key']) || empty($credentials['api_secret'])) {
                 return [
                     'success' => false,
-                    'message' => 'Failed to retrieve tracking information: ' . $response->body(),
+                    'message' => 'Steadfast API credentials not configured for this merchant',
                     'data' => null
                 ];
             }
+
+            $steadfastService = new \App\Services\SteadfastApiService($credentials['api_key'], $credentials['api_secret']);
+            
+            // Use courier tracking number if available, otherwise use parcel ID
+            $trackingNumber = $parcel->courier_tracking_number ?: $parcel->parcel_id;
+            
+            $result = $steadfastService->getTrackingStatus($trackingNumber);
+            
+            if ($result['success'] && isset($result['data'])) {
+                // Update parcel status if we got new tracking info
+                if (isset($result['data']['status'])) {
+                    $parcel->update(['status' => $result['data']['status']]);
+                }
+            }
+            
+            return $result;
         } catch (\Exception $e) {
-            Log::error('Courier API tracking error: ' . $e->getMessage(), [
+            Log::error('Steadfast tracking error: ' . $e->getMessage(), [
                 'parcel_id' => $parcel->id,
                 'courier_id' => $courier->id,
-                'tracking_number' => $parcel->tracking_number
+                'tracking_number' => $parcel->courier_tracking_number ?: $parcel->parcel_id
             ]);
 
             return [
                 'success' => false,
-                'message' => 'API request failed: ' . $e->getMessage(),
+                'message' => 'Steadfast API request failed: ' . $e->getMessage(),
                 'data' => null
             ];
         }

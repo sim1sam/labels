@@ -248,4 +248,186 @@ class ReportController extends Controller
 
         return response()->stream($callback, 200, $headers);
     }
+
+    // Comprehensive Merchant Reports
+    public function merchantReports(Request $request)
+    {
+        $merchant = auth()->user()->merchant;
+        
+        if (!$merchant) {
+            return redirect()->route('login')->with('error', 'Merchant account not found.');
+        }
+
+        $reportType = $request->get('report_type', 'all_parcels');
+        $startDate = $request->get('start_date');
+        $endDate = $request->get('end_date');
+        $status = $request->get('status');
+
+        // Base query for merchant parcels
+        $baseQuery = Parcel::with(['courier'])->where('merchant_id', $merchant->id);
+
+        // Apply date filters
+        if ($startDate) {
+            $baseQuery->whereDate('created_at', '>=', $startDate);
+        }
+        if ($endDate) {
+            $baseQuery->whereDate('created_at', '<=', $endDate);
+        }
+        if ($status) {
+            $baseQuery->where('status', $status);
+        }
+
+        // Get data based on report type
+        switch ($reportType) {
+            case 'printed_parcels':
+                $parcels = $baseQuery->whereNotNull('printed_at')->orderBy('printed_at', 'desc')->paginate(20);
+                break;
+            case 'delivered_parcels':
+                $parcels = $baseQuery->where('status', 'delivered')->orderBy('updated_at', 'desc')->paginate(20);
+                break;
+            case 'pending_parcels':
+                $parcels = $baseQuery->whereIn('status', ['pending', 'assigned'])->orderBy('created_at', 'desc')->paginate(20);
+                break;
+            case 'failed_parcels':
+                $parcels = $baseQuery->where('status', 'failed')->orderBy('updated_at', 'desc')->paginate(20);
+                break;
+            default: // all_parcels
+                $parcels = $baseQuery->orderBy('created_at', 'desc')->paginate(20);
+                break;
+        }
+
+        // Summary statistics
+        $stats = [
+            'total_parcels' => Parcel::where('merchant_id', $merchant->id)->count(),
+            'printed_parcels' => Parcel::where('merchant_id', $merchant->id)->whereNotNull('printed_at')->count(),
+            'delivered_parcels' => Parcel::where('merchant_id', $merchant->id)->where('status', 'delivered')->count(),
+            'pending_parcels' => Parcel::where('merchant_id', $merchant->id)->whereIn('status', ['pending', 'assigned'])->count(),
+            'failed_parcels' => Parcel::where('merchant_id', $merchant->id)->where('status', 'failed')->count(),
+            'total_cod_amount' => Parcel::where('merchant_id', $merchant->id)->sum('cod_amount'),
+            'delivered_cod_amount' => Parcel::where('merchant_id', $merchant->id)->where('status', 'delivered')->sum('cod_amount'),
+        ];
+
+        // Time-based statistics
+        $timeStats = [
+            'today_parcels' => Parcel::where('merchant_id', $merchant->id)->whereDate('created_at', today())->count(),
+            'this_week_parcels' => Parcel::where('merchant_id', $merchant->id)->whereBetween('created_at', [now()->startOfWeek(), now()->endOfWeek()])->count(),
+            'this_month_parcels' => Parcel::where('merchant_id', $merchant->id)->whereMonth('created_at', now()->month)->whereYear('created_at', now()->year)->count(),
+        ];
+
+        return view('merchant.reports.index', compact(
+            'parcels', 
+            'stats', 
+            'timeStats', 
+            'reportType',
+            'startDate',
+            'endDate',
+            'status'
+        ));
+    }
+
+    // Download Comprehensive Merchant Reports CSV
+    public function downloadMerchantReports(Request $request)
+    {
+        $merchant = auth()->user()->merchant;
+        
+        if (!$merchant) {
+            return redirect()->route('login')->with('error', 'Merchant account not found.');
+        }
+
+        $reportType = $request->get('report_type', 'all_parcels');
+        $startDate = $request->get('start_date');
+        $endDate = $request->get('end_date');
+        $status = $request->get('status');
+
+        // Base query for merchant parcels
+        $baseQuery = Parcel::with(['courier'])->where('merchant_id', $merchant->id);
+
+        // Apply filters
+        if ($startDate) {
+            $baseQuery->whereDate('created_at', '>=', $startDate);
+        }
+        if ($endDate) {
+            $baseQuery->whereDate('created_at', '<=', $endDate);
+        }
+        if ($status) {
+            $baseQuery->where('status', $status);
+        }
+
+        // Get data based on report type
+        switch ($reportType) {
+            case 'printed_parcels':
+                $parcels = $baseQuery->whereNotNull('printed_at')->orderBy('printed_at', 'desc')->get();
+                $filename = 'printed_parcels_' . now()->format('Y-m-d_H-i-s') . '.csv';
+                break;
+            case 'delivered_parcels':
+                $parcels = $baseQuery->where('status', 'delivered')->orderBy('updated_at', 'desc')->get();
+                $filename = 'delivered_parcels_' . now()->format('Y-m-d_H-i-s') . '.csv';
+                break;
+            case 'pending_parcels':
+                $parcels = $baseQuery->whereIn('status', ['pending', 'assigned'])->orderBy('created_at', 'desc')->get();
+                $filename = 'pending_parcels_' . now()->format('Y-m-d_H-i-s') . '.csv';
+                break;
+            case 'failed_parcels':
+                $parcels = $baseQuery->where('status', 'failed')->orderBy('updated_at', 'desc')->get();
+                $filename = 'failed_parcels_' . now()->format('Y-m-d_H-i-s') . '.csv';
+                break;
+            default: // all_parcels
+                $parcels = $baseQuery->orderBy('created_at', 'desc')->get();
+                $filename = 'all_parcels_' . now()->format('Y-m-d_H-i-s') . '.csv';
+                break;
+        }
+
+        $headers = [
+            'Content-Type' => 'text/csv',
+            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+        ];
+
+        $callback = function() use ($parcels) {
+            $file = fopen('php://output', 'w');
+
+            // CSV Headers
+            fputcsv($file, [
+                'Parcel ID',
+                'Customer Name',
+                'Mobile Number',
+                'Delivery Address',
+                'Courier Name',
+                'COD Amount (' . \App\Models\Setting::getCurrency() . ')',
+                'Status',
+                'Created Date',
+                'Created Time',
+                'Updated Date',
+                'Updated Time',
+                'Printed Date',
+                'Printed Time',
+                'Tracking Number',
+                'Notes'
+            ]);
+
+            // CSV Data
+            foreach ($parcels as $parcel) {
+                fputcsv($file, [
+                    $parcel->parcel_id,
+                    $parcel->customer_name,
+                    $parcel->mobile_number,
+                    $parcel->delivery_address,
+                    $parcel->courier->courier_name ?? 'N/A',
+                    number_format($parcel->cod_amount, 0),
+                    ucfirst(str_replace('_', ' ', $parcel->status)),
+                    $parcel->created_at->format('Y-m-d'),
+                    $parcel->created_at->format('H:i:s'),
+                    $parcel->updated_at->format('Y-m-d'),
+                    $parcel->updated_at->format('H:i:s'),
+                    $parcel->printed_at ? $parcel->printed_at->format('Y-m-d') : 'N/A',
+                    $parcel->printed_at ? $parcel->printed_at->format('H:i:s') : 'N/A',
+                    $parcel->courier_tracking_number ?? 'N/A',
+                    $parcel->notes ?? 'N/A'
+                ]);
+            }
+
+            fclose($file);
+        };
+
+        return response()->stream($callback, 200, $headers);
+    }
 }

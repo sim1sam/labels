@@ -1,53 +1,163 @@
 @extends('layouts.merchant')
 
-@section('title', 'My Parcels')
-@section('page-title', 'My Parcels')
+@section('title', 'Reports & Analytics')
+@section('page-title', 'Reports & Analytics')
 
 @section('content')
-@if(session('success'))
-    <div class="merchant-alert merchant-alert-success">
-        <i class="fas fa-check-circle"></i>
-        {{ session('success') }}
+<!-- Summary Statistics Cards -->
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 30px;">
+    <!-- Total Parcels -->
+    <div class="merchant-card" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+                <div style="font-size: 32px; font-weight: bold; margin-bottom: 8px;">{{ $stats['total_parcels'] }}</div>
+                <div style="font-size: 14px; opacity: 0.9;">Total Parcels</div>
+            </div>
+            <div style="font-size: 48px; opacity: 0.3;">
+                <i class="fas fa-box"></i>
+            </div>
+        </div>
     </div>
-@endif
 
-@if(session('error'))
-    <div class="merchant-alert merchant-alert-error">
-        <i class="fas fa-exclamation-circle"></i>
-        {{ session('error') }}
+    <!-- Delivered Parcels -->
+    <div class="merchant-card" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); color: white;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+                <div style="font-size: 32px; font-weight: bold; margin-bottom: 8px;">{{ $stats['delivered_parcels'] }}</div>
+                <div style="font-size: 14px; opacity: 0.9;">Delivered</div>
+            </div>
+            <div style="font-size: 48px; opacity: 0.3;">
+                <i class="fas fa-check-circle"></i>
+            </div>
+        </div>
     </div>
-@endif
 
-<!-- Filters -->
+    <!-- Pending Parcels -->
+    <div class="merchant-card" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+                <div style="font-size: 32px; font-weight: bold; margin-bottom: 8px;">{{ $stats['pending_parcels'] }}</div>
+                <div style="font-size: 14px; opacity: 0.9;">Pending</div>
+            </div>
+            <div style="font-size: 48px; opacity: 0.3;">
+                <i class="fas fa-clock"></i>
+            </div>
+        </div>
+    </div>
+
+    <!-- Failed Parcels -->
+    <div class="merchant-card" style="background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%); color: white;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+                <div style="font-size: 32px; font-weight: bold; margin-bottom: 8px;">{{ $stats['failed_parcels'] }}</div>
+                <div style="font-size: 14px; opacity: 0.9;">Failed</div>
+            </div>
+            <div style="font-size: 48px; opacity: 0.3;">
+                <i class="fas fa-exclamation-triangle"></i>
+            </div>
+        </div>
+    </div>
+
+    <!-- Total COD Amount -->
+    <div class="merchant-card" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); color: white;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+                <div style="font-size: 24px; font-weight: bold; margin-bottom: 8px;">{{ number_format($stats['total_cod_amount'], 0) }}</div>
+                <div style="font-size: 14px; opacity: 0.9;">Total COD ({{ \App\Models\Setting::getCurrency() }})</div>
+            </div>
+            <div style="font-size: 48px; opacity: 0.3;">
+                <i class="fas fa-money-bill-wave"></i>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delivered COD Amount -->
+    <div class="merchant-card" style="background: linear-gradient(135deg, #fa709a 0%, #fee140 100%); color: white;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+                <div style="font-size: 24px; font-weight: bold; margin-bottom: 8px;">{{ number_format($stats['delivered_cod_amount'], 0) }}</div>
+                <div style="font-size: 14px; opacity: 0.9;">Delivered COD ({{ \App\Models\Setting::getCurrency() }})</div>
+            </div>
+            <div style="font-size: 48px; opacity: 0.3;">
+                <i class="fas fa-hand-holding-usd"></i>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Time-based Statistics -->
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-bottom: 30px;">
+    <div class="merchant-card" style="text-align: center; padding: 20px;">
+        <div style="font-size: 24px; font-weight: bold; color: #667eea; margin-bottom: 8px;">{{ $timeStats['today_parcels'] }}</div>
+        <div style="font-size: 14px; color: #4a5568;">Today</div>
+    </div>
+    <div class="merchant-card" style="text-align: center; padding: 20px;">
+        <div style="font-size: 24px; font-weight: bold; color: #43e97b; margin-bottom: 8px;">{{ $timeStats['this_week_parcels'] }}</div>
+        <div style="font-size: 14px; color: #4a5568;">This Week</div>
+    </div>
+    <div class="merchant-card" style="text-align: center; padding: 20px;">
+        <div style="font-size: 24px; font-weight: bold; color: #f093fb; margin-bottom: 8px;">{{ $timeStats['this_month_parcels'] }}</div>
+        <div style="font-size: 14px; color: #4a5568;">This Month</div>
+    </div>
+</div>
+
+<!-- Report Filters -->
 <div class="merchant-card">
     <div class="merchant-card-header">
         <h3 class="merchant-card-title">
             <i class="fas fa-filter"></i>
-            Filter Parcels
+            Report Filters
         </h3>
     </div>
     
-    <form method="GET" action="{{ route('merchant.parcels.index') }}" style="display: flex; gap: 15px; align-items: end; flex-wrap: wrap;">
+    <form method="GET" action="{{ route('merchant.reports.index') }}" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; align-items: end;">
         <div>
-            <label style="display: block; font-weight: 600; color: #4a5568; margin-bottom: 8px;">Status</label>
-            <select name="status" style="padding: 10px 15px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 14px;">
-                <option value="">All Statuses</option>
-                <option value="pending" {{ request('status') == 'pending' ? 'selected' : '' }}>Pending</option>
-                <option value="assigned" {{ request('status') == 'assigned' ? 'selected' : '' }}>Assigned</option>
-                <option value="picked_up" {{ request('status') == 'picked_up' ? 'selected' : '' }}>Picked Up</option>
-                <option value="in_transit" {{ request('status') == 'in_transit' ? 'selected' : '' }}>In Transit</option>
-                <option value="delivered" {{ request('status') == 'delivered' ? 'selected' : '' }}>Delivered</option>
-                <option value="failed" {{ request('status') == 'failed' ? 'selected' : '' }}>Failed</option>
+            <label style="display: block; font-weight: 600; color: #4a5568; margin-bottom: 8px;">Report Type</label>
+            <select name="report_type" style="width: 100%; padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 14px;">
+                <option value="all_parcels" {{ $reportType == 'all_parcels' ? 'selected' : '' }}>All Parcels</option>
+                <option value="printed_parcels" {{ $reportType == 'printed_parcels' ? 'selected' : '' }}>Printed Parcels</option>
+                <option value="delivered_parcels" {{ $reportType == 'delivered_parcels' ? 'selected' : '' }}>Delivered Parcels</option>
+                <option value="pending_parcels" {{ $reportType == 'pending_parcels' ? 'selected' : '' }}>Pending Parcels</option>
+                <option value="failed_parcels" {{ $reportType == 'failed_parcels' ? 'selected' : '' }}>Failed Parcels</option>
             </select>
         </div>
         
+        <div>
+            <label style="display: block; font-weight: 600; color: #4a5568; margin-bottom: 8px;">Start Date</label>
+            <input type="date" 
+                   name="start_date" 
+                   value="{{ $startDate }}"
+                   style="width: 100%; padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 14px;">
+        </div>
+        
+        <div>
+            <label style="display: block; font-weight: 600; color: #4a5568; margin-bottom: 8px;">End Date</label>
+            <input type="date" 
+                   name="end_date" 
+                   value="{{ $endDate }}"
+                   style="width: 100%; padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 14px;">
+        </div>
+
+        <div>
+            <label style="display: block; font-weight: 600; color: #4a5568; margin-bottom: 8px;">Status</label>
+            <select name="status" style="width: 100%; padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 14px;">
+                <option value="">All Statuses</option>
+                <option value="pending" {{ $status == 'pending' ? 'selected' : '' }}>Pending</option>
+                <option value="assigned" {{ $status == 'assigned' ? 'selected' : '' }}>Assigned</option>
+                <option value="picked_up" {{ $status == 'picked_up' ? 'selected' : '' }}>Picked Up</option>
+                <option value="in_transit" {{ $status == 'in_transit' ? 'selected' : '' }}>In Transit</option>
+                <option value="delivered" {{ $status == 'delivered' ? 'selected' : '' }}>Delivered</option>
+                <option value="failed" {{ $status == 'failed' ? 'selected' : '' }}>Failed</option>
+            </select>
+        </div>
+
         <div style="display: flex; gap: 10px;">
             <button type="submit" class="merchant-btn merchant-btn-primary">
                 <i class="fas fa-search"></i>
                 Filter
             </button>
             
-            <a href="{{ route('merchant.parcels.index') }}" class="merchant-btn merchant-btn-secondary">
+            <a href="{{ route('merchant.reports.index') }}" class="merchant-btn merchant-btn-secondary">
                 <i class="fas fa-times"></i>
                 Clear
             </a>
@@ -55,21 +165,35 @@
     </form>
 </div>
 
-<!-- Parcels Table -->
+<!-- Results and Actions -->
 <div class="merchant-card">
     <div class="merchant-card-header">
         <h3 class="merchant-card-title">
-            <i class="fas fa-box"></i>
-            My Parcels ({{ $parcels->total() }} found)
+            <i class="fas fa-chart-bar"></i>
+            @switch($reportType)
+                @case('printed_parcels')
+                    Printed Parcels Report
+                    @break
+                @case('delivered_parcels')
+                    Delivered Parcels Report
+                    @break
+                @case('pending_parcels')
+                    Pending Parcels Report
+                    @break
+                @case('failed_parcels')
+                    Failed Parcels Report
+                    @break
+                @default
+                    All Parcels Report
+            @endswitch
+            ({{ $parcels->total() }} found)
         </h3>
+        
         <div style="display: flex; gap: 10px;">
-            <a href="{{ route('merchant.parcels.create') }}" class="merchant-btn merchant-btn-success">
-                <i class="fas fa-plus"></i>
-                Create New Parcel
-            </a>
-            <a href="{{ route('merchant.parcels.bulk-create') }}" class="merchant-btn merchant-btn-primary">
-                <i class="fas fa-upload"></i>
-                Bulk Upload
+            <a href="{{ route('merchant.reports.download', array_merge(request()->query(), ['report_type' => $reportType])) }}" 
+               class="merchant-btn merchant-btn-success">
+                <i class="fas fa-download"></i>
+                Download CSV
             </a>
         </div>
     </div>
@@ -85,6 +209,9 @@
                         <th style="padding: 15px; text-align: left; font-weight: 600; color: #2d3748;">COD Amount</th>
                         <th style="padding: 15px; text-align: left; font-weight: 600; color: #2d3748;">Status</th>
                         <th style="padding: 15px; text-align: left; font-weight: 600; color: #2d3748;">Created</th>
+                        @if($reportType == 'printed_parcels')
+                            <th style="padding: 15px; text-align: left; font-weight: 600; color: #2d3748;">Printed</th>
+                        @endif
                         <th style="padding: 15px; text-align: center; font-weight: 600; color: #2d3748;">Actions</th>
                     </tr>
                 </thead>
@@ -108,45 +235,49 @@
                                 {{ number_format($parcel->cod_amount, 0) }} {{ \App\Models\Setting::getCurrency() }}
                             </td>
                             <td style="padding: 15px;">
-                                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-                                    @php
-                                        $badgeColors = [
-                                            'pending' => '#fef5e7',
-                                            'assigned' => '#e6f3ff',
-                                            'picked_up' => '#e6f3ff',
-                                            'in_transit' => '#f7fafc',
-                                            'delivered' => '#c6f6d5',
-                                            'failed' => '#fed7d7'
-                                        ];
-                                        $textColors = [
-                                            'pending' => '#744210',
-                                            'assigned' => '#234e52',
-                                            'picked_up' => '#1a365d',
-                                            'in_transit' => '#4a5568',
-                                            'delivered' => '#22543d',
-                                            'failed' => '#742a2a'
-                                        ];
-                                    @endphp
-                                    <span style="background: {{ $badgeColors[$parcel->status] ?? '#f7fafc' }}; color: {{ $textColors[$parcel->status] ?? '#4a5568' }}; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 600;">
-                                        {{ $parcel->getStatusDisplayText() }}
-                                    </span>
-                                    @if($parcel->isPrinted())
-                                        <span style="background: #e6fffa; color: #234e52; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; display: flex; align-items: center; gap: 4px;">
-                                            <i class="fas fa-print"></i> Printed
-                                        </span>
-                                    @endif
-                                </div>
+                                @php
+                                    $badgeColors = [
+                                        'pending' => '#fef5e7',
+                                        'assigned' => '#e6f3ff',
+                                        'picked_up' => '#e6f3ff',
+                                        'in_transit' => '#f7fafc',
+                                        'delivered' => '#c6f6d5',
+                                        'failed' => '#fed7d7'
+                                    ];
+                                    $textColors = [
+                                        'pending' => '#744210',
+                                        'assigned' => '#234e52',
+                                        'picked_up' => '#1a365d',
+                                        'in_transit' => '#4a5568',
+                                        'delivered' => '#22543d',
+                                        'failed' => '#742a2a'
+                                    ];
+                                @endphp
+                                <span style="background: {{ $badgeColors[$parcel->status] ?? '#f7fafc' }}; color: {{ $textColors[$parcel->status] ?? '#4a5568' }}; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 600;">
+                                    {{ $parcel->getStatusDisplayText() }}
+                                </span>
                             </td>
                             <td style="padding: 15px; color: #718096; font-size: 14px;">
-                                {{ $parcel->created_at->format('M d, Y') }}
+                                <div>{{ $parcel->created_at->format('M d, Y') }}</div>
+                                <div style="font-size: 12px; color: #a0aec0;">{{ $parcel->created_at->format('h:i A') }}</div>
                             </td>
+                            @if($reportType == 'printed_parcels')
+                                <td style="padding: 15px; color: #718096; font-size: 14px;">
+                                    @if($parcel->printed_at)
+                                        <div>{{ $parcel->printed_at->format('M d, Y') }}</div>
+                                        <div style="font-size: 12px; color: #a0aec0;">{{ $parcel->printed_at->format('h:i A') }}</div>
+                                    @else
+                                        <span style="color: #a0aec0;">Not Printed</span>
+                                    @endif
+                                </td>
+                            @endif
                             <td style="padding: 15px; text-align: center;">
                                 <div style="display: flex; gap: 8px; justify-content: center; align-items: center; flex-wrap: wrap;">
                                     @if($parcel->courier && $parcel->courier->hasApiIntegration())
                                         <button onclick="showLiveTracking({{ $parcel->id }})" 
                                                 style="background: #38a169; color: white; padding: 6px 12px; border: none; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center;">
                                             <i class="fas fa-shipping-fast" style="margin-right: 4px;"></i>
-                                            Live Track
+                                            Track
                                         </button>
                                     @endif
                                     <a href="{{ route('merchant.parcels.show', $parcel) }}" 
@@ -154,19 +285,6 @@
                                         <i class="fas fa-eye" style="margin-right: 4px;"></i>
                                         View
                                     </a>
-                                    <a href="{{ route('merchant.parcels.edit', $parcel) }}" 
-                                       style="background: #ed8936; color: white; padding: 6px 12px; border-radius: 6px; text-decoration: none; font-size: 12px; font-weight: 600; display: inline-flex; align-items: center;">
-                                        <i class="fas fa-edit" style="margin-right: 4px;"></i>
-                                        Edit
-                                    </a>
-                                    <form action="{{ route('merchant.parcels.destroy', $parcel) }}" method="POST" style="display: inline;" onsubmit="return confirm('Are you sure you want to delete this parcel?')">
-                                        @csrf
-                                        @method('DELETE')
-                                        <button type="submit" style="background: #e53e3e; color: white; padding: 6px 12px; border: none; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center;">
-                                            <i class="fas fa-trash" style="margin-right: 4px;"></i>
-                                            Delete
-                                        </button>
-                                    </form>
                                 </div>
                             </td>
                         </tr>
@@ -181,18 +299,14 @@
         </div>
     @else
         <div style="text-align: center; padding: 40px; color: #718096;">
-            <i class="fas fa-box" style="font-size: 48px; margin-bottom: 16px; opacity: 0.5;"></i>
-            <h3 style="margin: 0 0 8px 0; color: #4a5568;">No Parcels Found</h3>
-            <p style="margin: 0 0 20px 0;">Create your first parcel to get started.</p>
-            <a href="{{ route('merchant.parcels.create') }}" class="merchant-btn merchant-btn-primary">
-                <i class="fas fa-plus"></i>
-                Create First Parcel
-            </a>
+            <i class="fas fa-chart-bar" style="font-size: 48px; margin-bottom: 16px; opacity: 0.5;"></i>
+            <h3 style="margin: 0 0 8px 0; color: #4a5568;">No Data Found</h3>
+            <p style="margin: 0;">No parcels match your current filters.</p>
         </div>
     @endif
 </div>
 
-<!-- Live Tracking Modal -->
+<!-- Live Tracking Modal (same as in parcels index) -->
 <div id="trackingModal" style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5);">
     <div style="background-color: white; margin: 5% auto; padding: 0; border-radius: 12px; width: 90%; max-width: 800px; max-height: 80vh; overflow-y: auto; box-shadow: 0 10px 30px rgba(0,0,0,0.3);">
         <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 12px 12px 0 0; display: flex; justify-content: space-between; align-items: center;">

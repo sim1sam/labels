@@ -367,6 +367,98 @@ class SteadfastApiService
     }
 
     /**
+     * Get tracking status for a parcel
+     */
+    public function getTrackingStatus(string $trackingNumber): array
+    {
+        if (config('courier.steadfast.mock_in_local') && app()->environment('local')) {
+            // Mock tracking data for local development
+            $mockStatuses = ['pending', 'picked_up', 'in_transit', 'delivered'];
+            $randomStatus = $mockStatuses[array_rand($mockStatuses)];
+            
+            return [
+                'success' => true,
+                'data' => [
+                    'tracking_code' => $trackingNumber,
+                    'status' => $randomStatus,
+                    'status_text' => ucfirst(str_replace('_', ' ', $randomStatus)),
+                    'current_location' => 'Dhaka, Bangladesh',
+                    'delivery_date' => $randomStatus === 'delivered' ? now()->format('Y-m-d H:i:s') : null,
+                    'delivery_attempts' => $randomStatus === 'delivered' ? 1 : 0,
+                    'delivery_notes' => $randomStatus === 'delivered' ? 'Delivered successfully' : null,
+                    'tracking_history' => [
+                        [
+                            'status' => 'pending',
+                            'status_text' => 'Pending',
+                            'location' => 'Dhaka, Bangladesh',
+                            'date' => now()->subDays(2)->format('Y-m-d H:i:s'),
+                            'notes' => 'Parcel received'
+                        ],
+                        [
+                            'status' => 'picked_up',
+                            'status_text' => 'Picked Up',
+                            'location' => 'Dhaka, Bangladesh',
+                            'date' => now()->subDays(1)->format('Y-m-d H:i:s'),
+                            'notes' => 'Parcel picked up from merchant'
+                        ],
+                        [
+                            'status' => 'in_transit',
+                            'status_text' => 'In Transit',
+                            'location' => 'Dhaka, Bangladesh',
+                            'date' => now()->subHours(12)->format('Y-m-d H:i:s'),
+                            'notes' => 'Parcel in transit to destination'
+                        ]
+                    ]
+                ],
+                'message' => 'Mock tracking status retrieved successfully'
+            ];
+        }
+
+        try {
+            $response = Http::withHeaders([
+                'Api-Key' => $this->apiKey,
+                'Secret-Key' => $this->secretKey,
+                'Content-Type' => 'application/json'
+            ])->timeout(30)->get($this->baseUrl . '/track', [
+                'tracking_code' => $trackingNumber
+            ]);
+
+            if ($response->successful()) {
+                $data = $response->json();
+                
+                return [
+                    'success' => true,
+                    'data' => $data,
+                    'message' => 'Tracking status retrieved successfully'
+                ];
+            } else {
+                // Check if response is HTML (404 page)
+                $contentType = $response->header('content-type');
+                if (strpos($contentType, 'text/html') !== false) {
+                    return [
+                        'success' => false,
+                        'data' => null,
+                        'message' => 'Tracking not available for this parcel. The tracking number may not exist in Steadfast system.'
+                    ];
+                }
+                
+                return [
+                    'success' => false,
+                    'data' => null,
+                    'message' => 'Failed to get tracking status: HTTP ' . $response->status()
+                ];
+            }
+        } catch (\Exception $e) {
+            \Log::error('Steadfast tracking error: ' . $e->getMessage());
+            return [
+                'success' => false,
+                'data' => null,
+                'message' => 'Failed to get tracking status: ' . $e->getMessage()
+            ];
+        }
+    }
+
+    /**
      * Test API connection
      */
     public function testConnection(): array
