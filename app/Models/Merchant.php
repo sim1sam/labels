@@ -13,8 +13,15 @@ class Merchant extends Model
         'email',
         'phone',
         'address',
+        'api_key',
+        'api_secret',
+        'api_config',
         'status',
         'user_id',
+    ];
+
+    protected $casts = [
+        'api_config' => 'array',
     ];
 
     // Relationship with User
@@ -27,7 +34,7 @@ class Merchant extends Model
     public function couriers()
     {
         return $this->belongsToMany(Courier::class, 'merchant_courier')
-                    ->withPivot('merchant_custom_id', 'status')
+                    ->withPivot('merchant_custom_id', 'status', 'merchant_api_key', 'merchant_api_secret', 'merchant_api_config', 'is_primary')
                     ->withTimestamps();
     }
 

@@ -90,7 +90,9 @@
                                 <div style="color: #e53e3e; font-size: 14px; margin-top: 5px;">{{ $message }}</div>
                             @enderror
                         </div>
-                        
+                    </div>
+                    
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 20px;">
                         <div>
                             <label for="logo" style="display: block; margin-bottom: 8px; font-weight: 600;">Logo</label>
                             <input type="file" id="logo" name="logo" accept="image/*" 

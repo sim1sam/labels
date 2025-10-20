@@ -62,10 +62,16 @@
             <i class="fas fa-box"></i>
             My Parcels ({{ $parcels->total() }} found)
         </h3>
-        <a href="{{ route('merchant.parcels.create') }}" class="merchant-btn merchant-btn-success">
-            <i class="fas fa-plus"></i>
-            Create New Parcel
-        </a>
+        <div style="display: flex; gap: 10px;">
+            <a href="{{ route('merchant.parcels.create') }}" class="merchant-btn merchant-btn-success">
+                <i class="fas fa-plus"></i>
+                Create New Parcel
+            </a>
+            <a href="{{ route('merchant.parcels.bulk-create') }}" class="merchant-btn merchant-btn-primary">
+                <i class="fas fa-upload"></i>
+                Bulk Upload
+            </a>
+        </div>
     </div>
 
     @if($parcels->count() > 0)

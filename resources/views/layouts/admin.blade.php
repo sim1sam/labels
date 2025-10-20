@@ -463,6 +463,12 @@
                     Settings
                 </a>
             </div>
+            <div class="nav-item">
+                <a href="{{ route('profile.show') }}" class="nav-link {{ request()->is('profile*') ? 'active' : '' }}">
+                    <i class="fas fa-user-cog"></i>
+                    Profile
+                </a>
+            </div>
         </nav>
     </div>
 

@@ -35,6 +35,14 @@ class MerchantController extends Controller
             'couriers.*' => 'exists:couriers,id',
             'merchant_custom_ids' => 'required|array|min:1',
             'merchant_custom_ids.*' => 'required|string|max:255',
+            'merchant_api_keys' => 'nullable|array',
+            'merchant_api_keys.*' => 'nullable|string|max:255',
+            'merchant_api_secrets' => 'nullable|array',
+            'merchant_api_secrets.*' => 'nullable|string|max:255',
+            'courier_status' => 'nullable|array',
+            'courier_status.*' => 'nullable|in:active,inactive',
+            'is_primary' => 'nullable|array',
+            'is_primary.*' => 'nullable|integer',
         ]);
 
         // Handle logo upload
@@ -66,12 +74,15 @@ class MerchantController extends Controller
             'user_id' => $user->id,
         ]);
 
-        // Attach couriers with custom merchant IDs
+        // Attach couriers with custom merchant IDs and API credentials
         $courierData = [];
         foreach ($request->couriers as $index => $courierId) {
             $courierData[$courierId] = [
                 'merchant_custom_id' => $request->merchant_custom_ids[$index],
-                'status' => 'active',
+                'status' => $request->courier_status[$index] ?? 'active',
+                'merchant_api_key' => $request->merchant_api_keys[$index] ?? null,
+                'merchant_api_secret' => $request->merchant_api_secrets[$index] ?? null,
+                'is_primary' => in_array($index, $request->is_primary ?? []),
             ];
         }
 
@@ -107,6 +118,14 @@ class MerchantController extends Controller
             'couriers.*' => 'exists:couriers,id',
             'merchant_custom_ids' => 'required|array|min:1',
             'merchant_custom_ids.*' => 'required|string|max:255',
+            'merchant_api_keys' => 'nullable|array',
+            'merchant_api_keys.*' => 'nullable|string|max:255',
+            'merchant_api_secrets' => 'nullable|array',
+            'merchant_api_secrets.*' => 'nullable|string|max:255',
+            'courier_status' => 'nullable|array',
+            'courier_status.*' => 'nullable|in:active,inactive',
+            'is_primary' => 'nullable|array',
+            'is_primary.*' => 'nullable|integer',
         ]);
 
         // Handle logo upload
@@ -149,7 +168,10 @@ class MerchantController extends Controller
         foreach ($request->couriers as $index => $courierId) {
             $courierData[$courierId] = [
                 'merchant_custom_id' => $request->merchant_custom_ids[$index],
-                'status' => 'active',
+                'status' => $request->courier_status[$index] ?? 'active',
+                'merchant_api_key' => $request->merchant_api_keys[$index] ?? null,
+                'merchant_api_secret' => $request->merchant_api_secrets[$index] ?? null,
+                'is_primary' => in_array($index, $request->is_primary ?? []),
             ];
         }
 

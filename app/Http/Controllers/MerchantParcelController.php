@@ -75,7 +75,8 @@ class MerchantParcelController extends Controller
             $request->delivery_address
         );
 
-        Parcel::create([
+        // Create parcel
+        $parcel = Parcel::create([
             'parcel_id' => Parcel::generateParcelId(),
             'merchant_id' => $merchant->id,
             'customer_name' => $request->customer_name,
@@ -85,7 +86,71 @@ class MerchantParcelController extends Controller
             'courier_id' => $request->courier_id,
             'status' => 'pending',
             'created_by' => 'merchant',
+            'tracking_number' => Parcel::generateTrackingNumber(),
         ]);
+
+        // If courier is selected and has API integration, create order with courier
+        if ($request->courier_id) {
+            $courier = \App\Models\Courier::find($request->courier_id);
+            
+            if ($courier && $courier->hasApiIntegration()) {
+                try {
+                    // Get API credentials - first try merchant-specific, then courier defaults
+                    $merchantCourier = $merchant->couriers()->where('couriers.id', $courier->id)->first();
+                    $apiKey = $merchantCourier ? ($merchantCourier->pivot->merchant_api_key ?: $courier->api_key) : $courier->api_key;
+                    $apiSecret = $merchantCourier ? ($merchantCourier->pivot->merchant_api_secret ?: $courier->api_secret) : $courier->api_secret;
+                    
+                    if (!empty($apiKey) && !empty($apiSecret)) {
+                        // Log API credentials being used
+                        \Log::info('Using API credentials for parcel creation', [
+                            'merchant_id' => $merchant->id,
+                            'courier_id' => $courier->id,
+                            'api_key_source' => $merchantCourier && $merchantCourier->pivot->merchant_api_key ? 'merchant' : 'courier',
+                            'api_key' => substr($apiKey, 0, 10) . '...',
+                            'parcel_id' => $parcel->parcel_id
+                        ]);
+                        
+                        // Create Steadfast API service instance
+                        $steadfastService = new \App\Services\SteadfastApiService(
+                            $apiKey,
+                            $apiSecret
+                        );
+                        
+                        // Load merchant relationship for API call
+                        $parcel->load('merchant');
+                        
+                        // Create order with Steadfast
+                        $result = $steadfastService->createOrder($parcel);
+                        
+                        if ($result['success']) {
+                            // Update parcel with Steadfast tracking info
+                            $parcel->update([
+                                'courier_tracking_number' => $result['data']['tracking_code'],
+                                'status' => $result['data']['status']
+                            ]);
+                            
+                            return redirect()->route('merchant.parcels.index')
+                                ->with('success', 'Parcel created successfully and order placed with ' . $courier->courier_name . '! Tracking: ' . $result['data']['tracking_code']);
+                        } else {
+                            // Log error but don't fail the parcel creation
+                            \Log::warning('Failed to create Steadfast order for parcel: ' . $parcel->parcel_id, [
+                                'error' => $result['message']
+                            ]);
+                            
+                            return redirect()->route('merchant.parcels.index')
+                                ->with('warning', 'Parcel created successfully, but failed to create order with ' . $courier->courier_name . '. Please try again later.');
+                        }
+                    }
+                } catch (\Exception $e) {
+                    \Log::error('Steadfast API error for parcel: ' . $parcel->parcel_id, [
+                        'error' => $e->getMessage()
+                    ]);
+                    
+                    return redirect()->route('merchant.parcels.index')
+                        ->with('warning', 'Parcel created successfully, but courier API is temporarily unavailable.');
+                }
+            }
+        }
 
         return redirect()->route('merchant.parcels.index')
                         ->with('success', 'Parcel created successfully!');
@@ -166,5 +231,177 @@ class MerchantParcelController extends Controller
 
         return redirect()->route('merchant.parcels.index')
                         ->with('success', 'Parcel deleted successfully!');
+    }
+
+    public function bulkCreate()
+    {
+        $merchant = auth()->user()->merchant;
+        
+        if (!$merchant) {
+            return redirect()->route('login')->with('error', 'Merchant account not found.');
+        }
+
+        // Get couriers assigned to this merchant
+        $couriers = $merchant->couriers()->where('merchant_courier.status', 'active')->get();
+
+        return view('merchant.parcels.bulk-create', compact('couriers'));
+    }
+
+    public function downloadFormat()
+    {
+        $merchant = auth()->user()->merchant;
+        
+        if (!$merchant) {
+            return redirect()->route('login')->with('error', 'Merchant account not found.');
+        }
+
+        // Get couriers assigned to this merchant
+        $couriers = $merchant->couriers()->where('merchant_courier.status', 'active')->get();
+
+        $filename = 'merchant_parcel_upload_format.csv';
+        
+        $headers = [
+            'Content-Type' => 'text/csv',
+            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+        ];
+
+        $callback = function() use ($couriers) {
+            $file = fopen('php://output', 'w');
+            
+            // CSV Headers
+            fputcsv($file, [
+                'customer_name',
+                'mobile_number', 
+                'delivery_address',
+                'cod_amount',
+                'courier_name'
+            ]);
+
+            // Sample data
+            fputcsv($file, [
+                'John Doe',
+                '+1234567890',
+                '123 Main Street, City, State',
+                '100',
+                $couriers->first() ? $couriers->first()->courier_name : 'Sample Courier'
+            ]);
+
+            fclose($file);
+        };
+
+        return response()->stream($callback, 200, $headers);
+    }
+
+    public function bulkStore(Request $request)
+    {
+        $merchant = auth()->user()->merchant;
+        
+        if (!$merchant) {
+            return redirect()->route('login')->with('error', 'Merchant account not found.');
+        }
+
+        $request->validate([
+            'csv_file' => 'required|file|mimes:csv,txt|max:2048',
+        ]);
+
+        $file = $request->file('csv_file');
+        $csvData = [];
+        
+        if (($handle = fopen($file->getPathname(), 'r')) !== FALSE) {
+            while (($data = fgetcsv($handle, 1000, ',')) !== FALSE) {
+                $csvData[] = $data;
+            }
+            fclose($handle);
+        }
+
+        if (empty($csvData)) {
+            return back()->withErrors(['csv_file' => 'CSV file is empty or invalid.']);
+        }
+
+        // Remove header row
+        array_shift($csvData);
+
+        $successCount = 0;
+        $errorCount = 0;
+        $errors = [];
+
+        foreach ($csvData as $index => $row) {
+            try {
+                // Validate required fields
+                if (count($row) < 5) {
+                    $errors[] = "Row " . ($index + 2) . ": Insufficient data";
+                    $errorCount++;
+                    continue;
+                }
+
+                $customerName = trim($row[0]);
+                $mobileNumber = trim($row[1]);
+                $deliveryAddress = trim($row[2]);
+                $codAmount = trim($row[3]);
+                $courierName = trim($row[4]) ?: null;
+
+                // Validate courier if provided
+                $courierId = null;
+                if ($courierName) {
+                    $courier = Courier::where('courier_name', $courierName)->first();
+                    if (!$courier) {
+                        $errors[] = "Row " . ($index + 2) . ": Courier '{$courierName}' not found";
+                        $errorCount++;
+                        continue;
+                    }
+                    
+                    // Verify courier is assigned to this merchant
+                    $isAssigned = $merchant->couriers()->where('courier_id', $courier->id)->exists();
+                    if (!$isAssigned) {
+                        $errors[] = "Row " . ($index + 2) . ": Courier '{$courierName}' is not assigned to your account";
+                        $errorCount++;
+                        continue;
+                    }
+                    
+                    $courierId = $courier->id;
+                }
+
+                // Validate COD amount
+                if (!is_numeric($codAmount) || $codAmount < 0) {
+                    $errors[] = "Row " . ($index + 2) . ": Invalid COD amount '{$codAmount}'";
+                    $errorCount++;
+                    continue;
+                }
+
+                // Automatically create or update customer
+                \App\Models\Customer::findOrCreate(
+                    $customerName,
+                    $mobileNumber,
+                    $deliveryAddress
+                );
+
+                // Create parcel
+                Parcel::create([
+                    'parcel_id' => Parcel::generateParcelId(),
+                    'merchant_id' => $merchant->id,
+                    'customer_name' => $customerName,
+                    'mobile_number' => $mobileNumber,
+                    'delivery_address' => $deliveryAddress,
+                    'cod_amount' => $codAmount,
+                    'courier_id' => $courierId,
+                    'status' => 'pending',
+                    'created_by' => 'merchant',
+                ]);
+
+                $successCount++;
+
+            } catch (\Exception $e) {
+                $errors[] = "Row " . ($index + 2) . ": " . $e->getMessage();
+                $errorCount++;
+            }
+        }
+
+        if ($errorCount > 0) {
+            return back()->withErrors(['csv_file' => implode('; ', $errors)])
+                        ->with('success', "Successfully created {$successCount} parcels. {$errorCount} errors occurred.");
+        }
+
+        return redirect()->route('merchant.parcels.index')
+                        ->with('success', "Successfully created {$successCount} parcels from CSV file!");
     }
 }

@@ -294,6 +294,7 @@
             border: 1px solid #feb2b2;
         }
     </style>
+    @stack('styles')
 </head>
 <body>
     <div class="merchant-container">
@@ -327,6 +328,12 @@
                     <a href="{{ route('merchant.reports.printed-parcels') }}" class="merchant-nav-link {{ request()->routeIs('merchant.reports.*') ? 'active' : '' }}">
                         <i class="fas fa-chart-bar"></i>
                         <span>Reports</span>
+                    </a>
+                </div>
+                <div class="merchant-nav-item">
+                    <a href="{{ route('profile.show') }}" class="merchant-nav-link {{ request()->is('profile*') ? 'active' : '' }}">
+                        <i class="fas fa-user-cog"></i>
+                        <span>Profile</span>
                     </a>
                 </div>
             </nav>

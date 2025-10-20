@@ -91,7 +91,9 @@
                                 <div style="color: #e53e3e; font-size: 14px; margin-top: 5px;">{{ $message }}</div>
                             @enderror
                         </div>
-                        
+                    </div>
+                    
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 20px;">
                         <div>
                             <label for="logo" style="display: block; margin-bottom: 8px; font-weight: 600;">Logo</label>
                             <input type="file" id="logo" name="logo" accept="image/*" 
@@ -118,91 +120,235 @@
                 
                 <!-- Courier Assignment -->
                 <div style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px;">
-                    <h4 style="margin-bottom: 15px; color: #2d3748;">Assign Couriers</h4>
-                    <p style="color: #718096; margin-bottom: 20px;">Select couriers and assign custom merchant IDs for each courier.</p>
+                    <h4 style="margin-bottom: 15px; color: #2d3748;">🚚 Assign Couriers with API Integration</h4>
+                    <p style="color: #718096; margin-bottom: 20px;">Select couriers and configure API credentials for live tracking and order management.</p>
                     
                     <div id="courier-selection">
                         @php
                             $selectedCouriers = $merchant->couriers->pluck('id')->toArray();
-                            $customIds = $merchant->couriers->pluck('pivot.merchant_custom_id', 'id')->toArray();
                         @endphp
                         
                         @if(old('couriers'))
                             @foreach(old('couriers') as $index => $courierId)
-                                <div class="courier-row" style="display: grid; grid-template-columns: 2fr 1fr auto; gap: 15px; margin-bottom: 15px; align-items: end;">
-                                    <div>
-                                        <label style="display: block; margin-bottom: 8px; font-weight: 600;">Courier</label>
-                                        <select name="couriers[]" style="width: 100%; padding: 12px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 16px;" required>
-                                            <option value="">Select Courier</option>
-                                            @foreach($couriers as $courier)
-                                                <option value="{{ $courier->id }}" {{ $courierId == $courier->id ? 'selected' : '' }}>
-                                                    {{ $courier->courier_name }} ({{ ucfirst($courier->vehicle_type) }})
-                                                </option>
-                                            @endforeach
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label style="display: block; margin-bottom: 8px; font-weight: 600;">Merchant ID</label>
-                                        <input type="text" name="merchant_custom_ids[]" value="{{ old('merchant_custom_ids.'.$index) }}" 
-                                               style="width: 100%; padding: 12px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 16px;"
-                                               placeholder="Custom ID" required>
-                                    </div>
-                                    <div>
-                                        <button type="button" class="btn btn-danger btn-sm remove-courier" style="padding: 12px;">
-                                            <i class="fas fa-trash"></i>
+                                <div class="courier-assignment-card" style="border: 2px solid #e2e8f0; border-radius: 12px; padding: 20px; margin-bottom: 20px; background: #f8fafc;">
+                                    <div style="display: flex; justify-content: between; align-items: center; margin-bottom: 15px;">
+                                        <h5 style="color: #2d3748; margin: 0;">Courier Assignment #{{ $index + 1 }}</h5>
+                                        <button type="button" class="btn btn-danger btn-sm remove-courier" style="padding: 8px 12px;">
+                                            <i class="fas fa-trash"></i> Remove
                                         </button>
+                                    </div>
+                                    
+                                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 15px;">
+                                        <div>
+                                            <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #4a5568;">Select Courier</label>
+                                            <select name="couriers[]" class="courier-select" style="width: 100%; padding: 12px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 16px;" required>
+                                                <option value="">Select Courier</option>
+                                                @foreach($couriers as $courier)
+                                                    <option value="{{ $courier->id }}" {{ $courierId == $courier->id ? 'selected' : '' }} 
+                                                            data-has-api="{{ $courier->hasApiIntegration() ? 'true' : 'false' }}"
+                                                            data-has-tracking="{{ $courier->supportsTracking() ? 'true' : 'false' }}">
+                                                        {{ $courier->courier_name }} 
+                                                        @if($courier->hasApiIntegration()) 
+                                                            <span style="color: #38a169;">✓ API</span>
+                                                        @endif
+                                                        @if($courier->supportsTracking()) 
+                                                            <span style="color: #3182ce;">✓ Tracking</span>
+                                                        @endif
+                                                    </option>
+                                                @endforeach
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #4a5568;">Merchant Custom ID</label>
+                                            <input type="text" name="merchant_custom_ids[]" value="{{ old('merchant_custom_ids.'.$index) }}" 
+                                                   style="width: 100%; padding: 12px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 16px;"
+                                                   placeholder="e.g., MERCHANT001" required>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- API Credentials Section -->
+                                    <div class="api-credentials" style="background: #edf2f7; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                                        <h6 style="color: #2d3748; margin-bottom: 10px;">🔑 API Credentials (Optional - for custom merchant API)</h6>
+                                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                                            <div>
+                                                <label style="display: block; margin-bottom: 5px; font-weight: 500; color: #4a5568;">API Key</label>
+                                                <input type="text" name="merchant_api_keys[]" value="{{ old('merchant_api_keys.'.$index) }}" 
+                                                       style="width: 100%; padding: 10px; border: 1px solid #cbd5e0; border-radius: 6px; font-size: 14px;"
+                                                       placeholder="Leave empty to use courier's default API">
+                                            </div>
+                                            <div>
+                                                <label style="display: block; margin-bottom: 5px; font-weight: 500; color: #4a5568;">API Secret</label>
+                                                <input type="password" name="merchant_api_secrets[]" value="{{ old('merchant_api_secrets.'.$index) }}" 
+                                                       style="width: 100%; padding: 10px; border: 1px solid #cbd5e0; border-radius: 6px; font-size: 14px;"
+                                                       placeholder="Leave empty to use courier's default API">
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Status and Primary -->
+                                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                                        <div>
+                                            <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #4a5568;">Status</label>
+                                            <select name="courier_status[]" style="width: 100%; padding: 10px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px;">
+                                                <option value="active" {{ old('courier_status.'.$index, 'active') == 'active' ? 'selected' : '' }}>Active</option>
+                                                <option value="inactive" {{ old('courier_status.'.$index) == 'inactive' ? 'selected' : '' }}>Inactive</option>
+                                            </select>
+                                        </div>
+                                        <div style="display: flex; align-items: center; margin-top: 25px;">
+                                            <input type="checkbox" name="is_primary[]" value="{{ $index }}" 
+                                                   {{ old('is_primary.'.$index) ? 'checked' : '' }}
+                                                   style="margin-right: 8px; transform: scale(1.2);">
+                                            <label style="font-weight: 600; color: #4a5568; margin: 0;">Set as Primary Courier</label>
+                                        </div>
                                     </div>
                                 </div>
                             @endforeach
                         @else
                             @if($merchant->couriers->count() > 0)
                                 @foreach($merchant->couriers as $index => $courier)
-                                    <div class="courier-row" style="display: grid; grid-template-columns: 2fr 1fr auto; gap: 15px; margin-bottom: 15px; align-items: end;">
+                                    <div class="courier-assignment-card" style="border: 2px solid #e2e8f0; border-radius: 12px; padding: 20px; margin-bottom: 20px; background: #f8fafc;">
+                                        <div style="display: flex; justify-content: between; align-items: center; margin-bottom: 15px;">
+                                            <h5 style="color: #2d3748; margin: 0;">Courier Assignment #{{ $index + 1 }}</h5>
+                                            <button type="button" class="btn btn-danger btn-sm remove-courier" style="padding: 8px 12px;">
+                                                <i class="fas fa-trash"></i> Remove
+                                            </button>
+                                        </div>
+                                        
+                                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 15px;">
+                                            <div>
+                                                <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #4a5568;">Select Courier</label>
+                                                <select name="couriers[]" class="courier-select" style="width: 100%; padding: 12px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 16px;" required>
+                                                    <option value="">Select Courier</option>
+                                                    @foreach($couriers as $c)
+                                                        <option value="{{ $c->id }}" {{ $courier->id == $c->id ? 'selected' : '' }} 
+                                                                data-has-api="{{ $c->hasApiIntegration() ? 'true' : 'false' }}"
+                                                                data-has-tracking="{{ $c->supportsTracking() ? 'true' : 'false' }}">
+                                                            {{ $c->courier_name }} 
+                                                            @if($c->hasApiIntegration()) 
+                                                                <span style="color: #38a169;">✓ API</span>
+                                                            @endif
+                                                            @if($c->supportsTracking()) 
+                                                                <span style="color: #3182ce;">✓ Tracking</span>
+                                                            @endif
+                                                        </option>
+                                                    @endforeach
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #4a5568;">Merchant Custom ID</label>
+                                                <input type="text" name="merchant_custom_ids[]" value="{{ $courier->pivot->merchant_custom_id }}" 
+                                                       style="width: 100%; padding: 12px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 16px;"
+                                                       placeholder="e.g., MERCHANT001" required>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- API Credentials Section -->
+                                        <div class="api-credentials" style="background: #edf2f7; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                                            <h6 style="color: #2d3748; margin-bottom: 10px;">🔑 API Credentials (Optional - for custom merchant API)</h6>
+                                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                                                <div>
+                                                    <label style="display: block; margin-bottom: 5px; font-weight: 500; color: #4a5568;">API Key</label>
+                                                    <input type="text" name="merchant_api_keys[]" value="{{ $courier->pivot->merchant_api_key }}" 
+                                                           style="width: 100%; padding: 10px; border: 1px solid #cbd5e0; border-radius: 6px; font-size: 14px;"
+                                                           placeholder="Leave empty to use courier's default API">
+                                                </div>
+                                                <div>
+                                                    <label style="display: block; margin-bottom: 5px; font-weight: 500; color: #4a5568;">API Secret</label>
+                                                    <input type="password" name="merchant_api_secrets[]" value="{{ $courier->pivot->merchant_api_secret }}" 
+                                                           style="width: 100%; padding: 10px; border: 1px solid #cbd5e0; border-radius: 6px; font-size: 14px;"
+                                                           placeholder="Leave empty to use courier's default API">
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- Status and Primary -->
+                                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                                            <div>
+                                                <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #4a5568;">Status</label>
+                                                <select name="courier_status[]" style="width: 100%; padding: 10px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px;">
+                                                    <option value="active" {{ $courier->pivot->status == 'active' ? 'selected' : '' }}>Active</option>
+                                                    <option value="inactive" {{ $courier->pivot->status == 'inactive' ? 'selected' : '' }}>Inactive</option>
+                                                </select>
+                                            </div>
+                                            <div style="display: flex; align-items: center; margin-top: 25px;">
+                                                <input type="checkbox" name="is_primary[]" value="{{ $index }}" 
+                                                       {{ $courier->pivot->is_primary ? 'checked' : '' }}
+                                                       style="margin-right: 8px; transform: scale(1.2);">
+                                                <label style="font-weight: 600; color: #4a5568; margin: 0;">Set as Primary Courier</label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                @endforeach
+                            @else
+                                <div class="courier-assignment-card" style="border: 2px solid #e2e8f0; border-radius: 12px; padding: 20px; margin-bottom: 20px; background: #f8fafc;">
+                                    <div style="display: flex; justify-content: between; align-items: center; margin-bottom: 15px;">
+                                        <h5 style="color: #2d3748; margin: 0;">Courier Assignment #1</h5>
+                                        <button type="button" class="btn btn-danger btn-sm remove-courier" style="padding: 8px 12px;">
+                                            <i class="fas fa-trash"></i> Remove
+                                        </button>
+                                    </div>
+                                    
+                                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 15px;">
                                         <div>
-                                            <label style="display: block; margin-bottom: 8px; font-weight: 600;">Courier</label>
-                                            <select name="couriers[]" style="width: 100%; padding: 12px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 16px;" required>
+                                            <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #4a5568;">Select Courier</label>
+                                            <select name="couriers[]" class="courier-select" style="width: 100%; padding: 12px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 16px;" required>
                                                 <option value="">Select Courier</option>
-                                                @foreach($couriers as $c)
-                                                    <option value="{{ $c->id }}" {{ $courier->id == $c->id ? 'selected' : '' }}>
-                                                        {{ $c->courier_name }} ({{ ucfirst($c->vehicle_type) }})
+                                                @foreach($couriers as $courier)
+                                                    <option value="{{ $courier->id }}" 
+                                                            data-has-api="{{ $courier->hasApiIntegration() ? 'true' : 'false' }}"
+                                                            data-has-tracking="{{ $courier->supportsTracking() ? 'true' : 'false' }}">
+                                                        {{ $courier->courier_name }} 
+                                                        @if($courier->hasApiIntegration()) 
+                                                            <span style="color: #38a169;">✓ API</span>
+                                                        @endif
+                                                        @if($courier->supportsTracking()) 
+                                                            <span style="color: #3182ce;">✓ Tracking</span>
+                                                        @endif
                                                     </option>
                                                 @endforeach
                                             </select>
                                         </div>
                                         <div>
-                                            <label style="display: block; margin-bottom: 8px; font-weight: 600;">Merchant ID</label>
-                                            <input type="text" name="merchant_custom_ids[]" value="{{ $courier->pivot->merchant_custom_id }}" 
+                                            <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #4a5568;">Merchant Custom ID</label>
+                                            <input type="text" name="merchant_custom_ids[]" 
                                                    style="width: 100%; padding: 12px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 16px;"
-                                                   placeholder="Custom ID" required>
+                                                   placeholder="e.g., MERCHANT001" required>
                                         </div>
+                                    </div>
+                                    
+                                    <!-- API Credentials Section -->
+                                    <div class="api-credentials" style="background: #edf2f7; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                                        <h6 style="color: #2d3748; margin-bottom: 10px;">🔑 API Credentials (Optional - for custom merchant API)</h6>
+                                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                                            <div>
+                                                <label style="display: block; margin-bottom: 5px; font-weight: 500; color: #4a5568;">API Key</label>
+                                                <input type="text" name="merchant_api_keys[]" 
+                                                       style="width: 100%; padding: 10px; border: 1px solid #cbd5e0; border-radius: 6px; font-size: 14px;"
+                                                       placeholder="Leave empty to use courier's default API">
+                                            </div>
+                                            <div>
+                                                <label style="display: block; margin-bottom: 5px; font-weight: 500; color: #4a5568;">API Secret</label>
+                                                <input type="password" name="merchant_api_secrets[]" 
+                                                       style="width: 100%; padding: 10px; border: 1px solid #cbd5e0; border-radius: 6px; font-size: 14px;"
+                                                       placeholder="Leave empty to use courier's default API">
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Status and Primary -->
+                                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
                                         <div>
-                                            <button type="button" class="btn btn-danger btn-sm remove-courier" style="padding: 12px;">
-                                                <i class="fas fa-trash"></i>
-                                            </button>
+                                            <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #4a5568;">Status</label>
+                                            <select name="courier_status[]" style="width: 100%; padding: 10px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px;">
+                                                <option value="active" selected>Active</option>
+                                                <option value="inactive">Inactive</option>
+                                            </select>
                                         </div>
-                                    </div>
-                                @endforeach
-                            @else
-                                <div class="courier-row" style="display: grid; grid-template-columns: 2fr 1fr auto; gap: 15px; margin-bottom: 15px; align-items: end;">
-                                    <div>
-                                        <label style="display: block; margin-bottom: 8px; font-weight: 600;">Courier</label>
-                                        <select name="couriers[]" style="width: 100%; padding: 12px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 16px;" required>
-                                            <option value="">Select Courier</option>
-                                            @foreach($couriers as $courier)
-                                                <option value="{{ $courier->id }}">{{ $courier->courier_name }} ({{ ucfirst($courier->vehicle_type) }})</option>
-                                            @endforeach
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label style="display: block; margin-bottom: 8px; font-weight: 600;">Merchant ID</label>
-                                        <input type="text" name="merchant_custom_ids[]" 
-                                               style="width: 100%; padding: 12px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 16px;"
-                                               placeholder="Custom ID" required>
-                                    </div>
-                                    <div>
-                                        <button type="button" class="btn btn-danger btn-sm remove-courier" style="padding: 12px;">
-                                            <i class="fas fa-trash"></i>
-                                        </button>
+                                        <div style="display: flex; align-items: center; margin-top: 25px;">
+                                            <input type="checkbox" name="is_primary[]" value="0" checked
+                                                   style="margin-right: 8px; transform: scale(1.2);">
+                                            <label style="font-weight: 600; color: #4a5568; margin: 0;">Set as Primary Courier</label>
+                                        </div>
                                     </div>
                                 </div>
                             @endif
@@ -242,48 +388,141 @@ document.addEventListener('DOMContentLoaded', function() {
     const courierSelection = document.getElementById('courier-selection');
     const addCourierBtn = document.getElementById('add-courier');
     
-    // Add courier row
+    let courierCount = document.querySelectorAll('.courier-assignment-card').length;
+    
+    // Add courier assignment card
     addCourierBtn.addEventListener('click', function() {
-        const courierRow = document.createElement('div');
-        courierRow.className = 'courier-row';
-        courierRow.style.cssText = 'display: grid; grid-template-columns: 2fr 1fr auto; gap: 15px; margin-bottom: 15px; align-items: end;';
+        courierCount++;
+        const courierCard = document.createElement('div');
+        courierCard.className = 'courier-assignment-card';
+        courierCard.style.cssText = 'border: 2px solid #e2e8f0; border-radius: 12px; padding: 20px; margin-bottom: 20px; background: #f8fafc;';
         
-        courierRow.innerHTML = `
-            <div>
-                <label style="display: block; margin-bottom: 8px; font-weight: 600;">Courier</label>
-                <select name="couriers[]" style="width: 100%; padding: 12px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 16px;" required>
-                    <option value="">Select Courier</option>
-                    @foreach($couriers as $courier)
-                        <option value="{{ $courier->id }}">{{ $courier->courier_name }} ({{ ucfirst($courier->vehicle_type) }})</option>
-                    @endforeach
-                </select>
-            </div>
-            <div>
-                <label style="display: block; margin-bottom: 8px; font-weight: 600;">Merchant ID</label>
-                <input type="text" name="merchant_custom_ids[]" 
-                       style="width: 100%; padding: 12px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 16px;"
-                       placeholder="Custom ID" required>
-            </div>
-            <div>
-                <button type="button" class="btn btn-danger btn-sm remove-courier" style="padding: 12px;">
-                    <i class="fas fa-trash"></i>
+        courierCard.innerHTML = `
+            <div style="display: flex; justify-content: between; align-items: center; margin-bottom: 15px;">
+                <h5 style="color: #2d3748; margin: 0;">Courier Assignment #${courierCount}</h5>
+                <button type="button" class="btn btn-danger btn-sm remove-courier" style="padding: 8px 12px;">
+                    <i class="fas fa-trash"></i> Remove
                 </button>
+            </div>
+            
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 15px;">
+                <div>
+                    <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #4a5568;">Select Courier</label>
+                    <select name="couriers[]" class="courier-select" style="width: 100%; padding: 12px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 16px;" required>
+                        <option value="">Select Courier</option>
+                        @foreach($couriers as $courier)
+                            <option value="{{ $courier->id }}" 
+                                    data-has-api="{{ $courier->hasApiIntegration() ? 'true' : 'false' }}"
+                                    data-has-tracking="{{ $courier->supportsTracking() ? 'true' : 'false' }}">
+                                {{ $courier->courier_name }} 
+                                @if($courier->hasApiIntegration()) 
+                                    <span style="color: #38a169;">✓ API</span>
+                                @endif
+                                @if($courier->supportsTracking()) 
+                                    <span style="color: #3182ce;">✓ Tracking</span>
+                                @endif
+                            </option>
+                        @endforeach
+                    </select>
+                </div>
+                <div>
+                    <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #4a5568;">Merchant Custom ID</label>
+                    <input type="text" name="merchant_custom_ids[]" 
+                           style="width: 100%; padding: 12px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 16px;"
+                           placeholder="e.g., MERCHANT001" required>
+                </div>
+            </div>
+            
+            <!-- API Credentials Section -->
+            <div class="api-credentials" style="background: #edf2f7; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                <h6 style="color: #2d3748; margin-bottom: 10px;">🔑 API Credentials (Optional - for custom merchant API)</h6>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <div>
+                        <label style="display: block; margin-bottom: 5px; font-weight: 500; color: #4a5568;">API Key</label>
+                        <input type="text" name="merchant_api_keys[]" 
+                               style="width: 100%; padding: 10px; border: 1px solid #cbd5e0; border-radius: 6px; font-size: 14px;"
+                               placeholder="Leave empty to use courier's default API">
+                    </div>
+                    <div>
+                        <label style="display: block; margin-bottom: 5px; font-weight: 500; color: #4a5568;">API Secret</label>
+                        <input type="password" name="merchant_api_secrets[]" 
+                               style="width: 100%; padding: 10px; border: 1px solid #cbd5e0; border-radius: 6px; font-size: 14px;"
+                               placeholder="Leave empty to use courier's default API">
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Status and Primary -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                <div>
+                    <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #4a5568;">Status</label>
+                    <select name="courier_status[]" style="width: 100%; padding: 10px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px;">
+                        <option value="active" selected>Active</option>
+                        <option value="inactive">Inactive</option>
+                    </select>
+                </div>
+                <div style="display: flex; align-items: center; margin-top: 25px;">
+                    <input type="checkbox" name="is_primary[]" value="${courierCount - 1}" 
+                           style="margin-right: 8px; transform: scale(1.2);">
+                    <label style="font-weight: 600; color: #4a5568; margin: 0;">Set as Primary Courier</label>
+                </div>
             </div>
         `;
         
-        courierSelection.appendChild(courierRow);
+        courierSelection.appendChild(courierCard);
+        
+        // Add event listener for courier selection change
+        const courierSelect = courierCard.querySelector('.courier-select');
+        courierSelect.addEventListener('change', function() {
+            const selectedOption = this.options[this.selectedIndex];
+            const hasApi = selectedOption.getAttribute('data-has-api') === 'true';
+            const apiSection = courierCard.querySelector('.api-credentials');
+            
+            if (hasApi) {
+                apiSection.style.display = 'block';
+            } else {
+                apiSection.style.display = 'none';
+            }
+        });
     });
     
-    // Remove courier row
+    // Remove courier assignment card
     courierSelection.addEventListener('click', function(e) {
-        if (e.target.closest('.remove-courier')) {
-            const courierRows = courierSelection.querySelectorAll('.courier-row');
-            if (courierRows.length > 1) {
-                e.target.closest('.courier-row').remove();
-            } else {
-                alert('At least one courier is required.');
+        if (e.target.classList.contains('remove-courier') || e.target.closest('.remove-courier')) {
+            const courierCard = e.target.closest('.courier-assignment-card');
+            if (courierCard) {
+                courierCard.remove();
+                updateCourierNumbering();
             }
         }
+    });
+    
+    // Update courier numbering
+    function updateCourierNumbering() {
+        const cards = document.querySelectorAll('.courier-assignment-card');
+        cards.forEach((card, index) => {
+            const title = card.querySelector('h5');
+            if (title) {
+                title.textContent = `Courier Assignment #${index + 1}`;
+            }
+        });
+    }
+    
+    // Add event listeners to existing courier selects
+    document.querySelectorAll('.courier-select').forEach(function(select) {
+        select.addEventListener('change', function() {
+            const selectedOption = this.options[this.selectedIndex];
+            const hasApi = selectedOption.getAttribute('data-has-api') === 'true';
+            
+            const courierCard = this.closest('.courier-assignment-card');
+            const apiSection = courierCard.querySelector('.api-credentials');
+            
+            if (hasApi) {
+                apiSection.style.display = 'block';
+            } else {
+                apiSection.style.display = 'none';
+            }
+        });
     });
 });
 

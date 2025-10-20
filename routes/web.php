@@ -95,6 +95,11 @@ Route::middleware(['auth', 'role:merchant'])->group(function () {
     // Dashboard
     Route::get('/merchant/dashboard', [App\Http\Controllers\MerchantDashboardController::class, 'dashboard'])->name('merchant.dashboard');
     
+    // Bulk parcel upload (must be before resource routes to avoid conflicts)
+    Route::get('merchant/parcels/bulk-create', [App\Http\Controllers\MerchantParcelController::class, 'bulkCreate'])->name('merchant.parcels.bulk-create');
+    Route::post('merchant/parcels/bulk-store', [App\Http\Controllers\MerchantParcelController::class, 'bulkStore'])->name('merchant.parcels.bulk-store');
+    Route::get('merchant/parcels/download-format', [App\Http\Controllers\MerchantParcelController::class, 'downloadFormat'])->name('merchant.parcels.download-format');
+    
     // Parcels
     Route::resource('merchant/parcels', App\Http\Controllers\MerchantParcelController::class)->names([
         'index' => 'merchant.parcels.index',
@@ -113,19 +118,26 @@ Route::middleware(['auth', 'role:merchant'])->group(function () {
 
 // Common authenticated routes
 Route::middleware(['auth'])->group(function () {
-    Route::get('/profile', function () {
-        $user = auth()->user();
-        $dashboardLink = $user->isAdmin() ? route('admin.dashboard') : route('merchant.dashboard');
-        return "
-            <h1>Profile</h1>
-            <p>Name: {$user->name}</p>
-            <p>Email: {$user->email}</p>
-            <p>User Type: {$user->user_type}</p>
-            <p><a href='{$dashboardLink}'>Go to Dashboard</a></p>
-            <form method='POST' action='/logout' style='display: inline;'>
-                " . csrf_field() . "
-                <button type='submit'>Logout</button>
-            </form>
-        ";
+    // Profile routes
+    Route::get('/profile', [App\Http\Controllers\ProfileController::class, 'show'])->name('profile.show');
+    
+    // Admin profile update
+    Route::middleware(['role:admin'])->group(function () {
+        Route::put('/profile/admin', [App\Http\Controllers\ProfileController::class, 'updateAdmin'])->name('profile.update.admin');
+    });
+    
+    // Merchant profile update
+    Route::middleware(['role:merchant'])->group(function () {
+        Route::put('/profile/merchant', [App\Http\Controllers\ProfileController::class, 'updateMerchant'])->name('profile.update.merchant');
+    });
+    
+    // Courier API routes
+    Route::prefix('api')->group(function () {
+        Route::get('/courier-options', [App\Http\Controllers\CourierApiController::class, 'getCourierOptions']);
+        Route::get('/available-couriers', [App\Http\Controllers\CourierApiController::class, 'getAvailableCouriers']);
+        Route::get('/tracking/{parcel}', [App\Http\Controllers\CourierApiController::class, 'getTracking']);
+        Route::get('/live-tracking/{parcel}', [App\Http\Controllers\CourierApiController::class, 'getLiveTracking']);
+        Route::post('/shipment/{parcel}', [App\Http\Controllers\CourierApiController::class, 'createShipment']);
+        Route::get('/test-connection/{courier}', [App\Http\Controllers\CourierApiController::class, 'testConnection']);
     });
 });

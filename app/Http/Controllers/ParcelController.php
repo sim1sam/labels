@@ -67,7 +67,63 @@ class ParcelController extends Controller
             'notes' => $request->notes,
             'status' => $request->courier_id ? 'assigned' : 'pending',
             'created_by' => 'admin',
+            'tracking_number' => Parcel::generateTrackingNumber(),
         ]);
+
+        // If courier is selected and has API integration, create order with courier
+        if ($request->courier_id) {
+            $courier = Courier::find($request->courier_id);
+            $merchant = Merchant::find($request->merchant_id);
+            
+            if ($courier && $courier->hasApiIntegration() && $merchant) {
+                try {
+                    // Get API credentials - first try merchant-specific, then courier defaults
+                    $merchantCourier = $merchant->couriers()->where('couriers.id', $courier->id)->first();
+                    $apiKey = $merchantCourier ? ($merchantCourier->pivot->merchant_api_key ?: $courier->api_key) : $courier->api_key;
+                    $apiSecret = $merchantCourier ? ($merchantCourier->pivot->merchant_api_secret ?: $courier->api_secret) : $courier->api_secret;
+                    
+                    if (!empty($apiKey) && !empty($apiSecret)) {
+                        // Create Steadfast API service instance
+                        $steadfastService = new \App\Services\SteadfastApiService(
+                            $apiKey,
+                            $apiSecret
+                        );
+                        
+                        // Load merchant relationship for API call
+                        $parcel->load('merchant');
+                        
+                        // Create order with Steadfast
+                        $result = $steadfastService->createOrder($parcel);
+                        
+                        if ($result['success']) {
+                            // Update parcel with Steadfast tracking info
+                            $parcel->update([
+                                'courier_tracking_number' => $result['data']['tracking_code'],
+                                'status' => $result['data']['status']
+                            ]);
+                            
+                            return redirect()->route('admin.parcels.index')
+                                ->with('success', 'Parcel created successfully and order placed with ' . $courier->courier_name . '! Tracking: ' . $result['data']['tracking_code']);
+                        } else {
+                            // Log error but don't fail the parcel creation
+                            \Log::warning('Failed to create Steadfast order for parcel: ' . $parcel->parcel_id, [
+                                'error' => $result['message']
+                            ]);
+                            
+                            return redirect()->route('admin.parcels.index')
+                                ->with('warning', 'Parcel created successfully, but failed to create order with ' . $courier->courier_name . '. Please try again later.');
+                        }
+                    }
+                } catch (\Exception $e) {
+                    \Log::error('Steadfast API error for parcel: ' . $parcel->parcel_id, [
+                        'error' => $e->getMessage()
+                    ]);
+                    
+                    return redirect()->route('admin.parcels.index')
+                        ->with('warning', 'Parcel created successfully, but courier API is temporarily unavailable.');
+                }
+            }
+        }
 
         return redirect()->route('admin.parcels.index')
                         ->with('success', 'Parcel created successfully.');

@@ -9,10 +9,23 @@ class Parcel extends Model
     protected $fillable = [
         'parcel_id',
         'merchant_id',
+        'tracking_number',
+        'courier_tracking_number',
+        'tracking_history',
+        'last_tracking_update',
         'customer_name',
+        'sender_name',
+        'sender_phone',
+        'sender_address',
         'mobile_number',
+        'receiver_name',
+        'receiver_phone',
+        'receiver_address',
         'delivery_address',
         'cod_amount',
+        'weight',
+        'description',
+        'declared_value',
         'status',
         'courier_id',
         'notes',
@@ -24,9 +37,13 @@ class Parcel extends Model
 
     protected $casts = [
         'cod_amount' => 'decimal:2',
+        'weight' => 'decimal:2',
+        'declared_value' => 'decimal:2',
+        'tracking_history' => 'array',
         'pickup_date' => 'datetime',
         'delivery_date' => 'datetime',
         'printed_at' => 'datetime',
+        'last_tracking_update' => 'datetime',
     ];
 
     // Relationship with Merchant
@@ -101,5 +118,58 @@ class Parcel extends Model
     public function getCreatedByDisplayText()
     {
         return $this->created_by === 'merchant' ? 'Merchant' : 'Admin';
+    }
+
+    // Generate tracking number
+    public static function generateTrackingNumber()
+    {
+        do {
+            $trackingNumber = 'TRK' . str_pad(rand(1, 999999), 6, '0', STR_PAD_LEFT);
+        } while (self::where('tracking_number', $trackingNumber)->exists());
+        
+        return $trackingNumber;
+    }
+
+    // Check if parcel has tracking
+    public function hasTracking(): bool
+    {
+        return !empty($this->tracking_number) && !empty($this->courier_id);
+    }
+
+    // Get tracking URL
+    public function getTrackingUrl(): ?string
+    {
+        if (!$this->courier || !$this->tracking_number) {
+            return null;
+        }
+
+        return $this->courier->getTrackingUrl($this->tracking_number);
+    }
+
+    // Update tracking history
+    public function updateTrackingHistory(array $trackingData): void
+    {
+        $history = $this->tracking_history ?? [];
+        $history[] = [
+            'status' => $trackingData['status'] ?? $this->status,
+            'location' => $trackingData['location'] ?? null,
+            'timestamp' => $trackingData['timestamp'] ?? now()->toISOString(),
+            'description' => $trackingData['description'] ?? null,
+        ];
+
+        $this->update([
+            'tracking_history' => $history,
+            'last_tracking_update' => now(),
+        ]);
+    }
+
+    // Get latest tracking status
+    public function getLatestTrackingStatus(): ?array
+    {
+        if (empty($this->tracking_history)) {
+            return null;
+        }
+
+        return end($this->tracking_history);
     }
 }
