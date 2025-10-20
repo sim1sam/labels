@@ -293,46 +293,6 @@
             border-left: 4px solid #e53e3e;
         }
 
-        /* Demo Accounts */
-        .demo-accounts {
-            margin-top: 30px;
-            padding: 20px;
-            background: rgba(102, 126, 234, 0.1);
-            border-radius: 12px;
-            border: 1px solid rgba(102, 126, 234, 0.2);
-        }
-
-        .demo-accounts h3 {
-            color: #2d3748;
-            margin-bottom: 15px;
-            font-size: 16px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .demo-account {
-            background: white;
-            padding: 15px;
-            border-radius: 8px;
-            margin-bottom: 10px;
-            border-left: 4px solid #667eea;
-        }
-
-        .demo-account:last-child {
-            margin-bottom: 0;
-        }
-
-        .demo-account strong {
-            color: #667eea;
-            display: block;
-            margin-bottom: 5px;
-        }
-
-        .demo-account span {
-            color: #4a5568;
-            font-size: 14px;
-        }
 
         /* Responsive Design */
         @media (max-width: 480px) {
@@ -482,22 +442,6 @@
                 </button>
             </form>
             
-            <div class="demo-accounts">
-                <h3>
-                    <i class="fas fa-info-circle"></i>
-                    Demo Accounts
-                </h3>
-                <div class="demo-account">
-                    <strong><i class="fas fa-user-shield"></i> Administrator</strong>
-                    <span>admin@example.com</span><br>
-                    <span>Password: password</span>
-                </div>
-                <div class="demo-account">
-                    <strong><i class="fas fa-store"></i> Merchant</strong>
-                    <span>merchant@example.com</span><br>
-                    <span>Password: password</span>
-                </div>
-            </div>
         </div>
     </div>
 </body>
