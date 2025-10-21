@@ -93,6 +93,22 @@
             margin-right: 2mm;
         }
         
+        .shipped-by .section-title {
+            font-weight: bold;
+            font-size: 12px;
+            margin-bottom: 1mm;
+        }
+        
+        .shipped-by .merchant-name {
+            font-weight: bold;
+            font-size: 13px;
+            margin-bottom: 1mm;
+        }
+        
+        .shipped-by .merchant-phone {
+            font-size: 11px;
+        }
+        
         .merchant-id-box {
             width: 25mm;
             height: 14mm;
@@ -107,14 +123,14 @@
         }
         
         .merchant-id-label {
-            font-size: 9px;
+            font-size: 11px;
             font-weight: bold;
             margin-bottom: 0.5mm;
             text-align: center;
         }
         
         .merchant-id-value {
-            font-size: 9px;
+            font-size: 13px;
             font-weight: bold;
             text-align: center;
             word-break: break-all;
@@ -134,7 +150,7 @@
         
         .customer-info .section-title {
             font-weight: bold;
-            font-size: 11px;
+            font-size: 12px;
             margin-bottom: 1mm;
         }
         
@@ -145,10 +161,29 @@
         
         .customer-name {
             font-weight: bold !important;
+            font-size: 14px !important;
         }
         
         .customer-mobile {
             font-weight: bold !important;
+        }
+        
+        .customer-address-container {
+            display: flex;
+            align-items: flex-start;
+            margin-bottom: 1mm;
+        }
+        
+        .customer-address-label {
+            font-weight: bold;
+            font-size: 11px;
+            margin-right: 2mm;
+            flex-shrink: 0;
+        }
+        
+        .customer-address {
+            font-size: 11px;
+            flex: 1;
         }
         
         .bill-amount-box {
@@ -166,13 +201,13 @@
         .disclaimer {
             display: flex;
             align-items: center;
-            font-size: 11px;
+            font-size: 10px;
             margin-top: 2mm;
         }
         
         .warning-icon {
             width: 4mm;
-            height: 4mm;
+            height: 3mm;
             background: #000;
             color: white;
             border-radius: 50%;
@@ -180,7 +215,7 @@
             align-items: center;
             justify-content: center;
             margin-right: 1mm;
-            font-size: 6px;
+            font-size: 7px;
         }
         
         @media print {
@@ -239,8 +274,8 @@
         <div class="content-row">
             <div class="shipped-by">
                 <div class="section-title">Shipped By:</div>
-                <div>{{ $parcel->merchant->shop_name }}</div>
-                <div>Mobile# {{ $parcel->merchant->phone ?? 'N/A' }}</div>
+                <div class="merchant-name">{{ $parcel->merchant->shop_name }}</div>
+                <div class="merchant-phone">Mobile# {{ $parcel->merchant->phone ?? 'N/A' }}</div>
             </div>
             <div class="merchant-id-box">
                 <div class="merchant-id-label">Merchant ID#</div>
@@ -254,7 +289,10 @@
             <div class="customer-info">
                 <div class="section-title">Shipped To:</div>
                 <div class="customer-name">{{ $parcel->customer_name }}</div>
-                <div>{{ $parcel->delivery_address }}</div>
+                <div class="customer-address-container">
+                    <div class="customer-address-label">Address:</div>
+                    <div class="customer-address">{{ $parcel->delivery_address }}</div>
+                </div>
                 <div class="customer-mobile">Mobile# {{ $parcel->mobile_number }}</div>
             </div>
         
