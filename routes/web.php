@@ -118,6 +118,200 @@ Route::middleware(['auth', 'role:merchant'])->group(function () {
     Route::get('merchant/reports/printed-parcels/download', [App\Http\Controllers\ReportController::class, 'downloadMerchantPrintedParcels'])->name('merchant.reports.printed-parcels.download');
 });
 
+// Public debug routes (no authentication required)
+Route::get('/debug/steadfast', function () {
+    try {
+        $courier = App\Models\Courier::where('courier_name', 'like', '%Steadfast%')->first();
+        
+        if (!$courier) {
+            return response()->json([
+                'error' => 'Steadfast Courier not found in database',
+                'message' => 'Please create Steadfast courier first'
+            ], 404);
+        }
+        
+        $apiService = new App\Services\SteadfastApiService($courier->api_key, $courier->api_secret);
+        $result = $apiService->testConnection();
+        
+        return response()->json([
+            'courier_info' => [
+                'id' => $courier->id,
+                'name' => $courier->courier_name,
+                'api_endpoint' => $courier->api_endpoint,
+                'has_api_key' => !empty($courier->api_key),
+                'has_api_secret' => !empty($courier->api_secret),
+                'status' => $courier->status
+            ],
+            'api_test' => $result,
+            'environment' => [
+                'steadfast_enabled' => config('courier.steadfast.enabled'),
+                'mock_in_local' => config('courier.steadfast.mock_in_local'),
+                'base_url' => config('courier.steadfast.base_url'),
+                'timeout' => config('courier.steadfast.timeout')
+            ]
+        ]);
+    } catch (Exception $e) {
+        return response()->json([
+            'error' => 'Exception occurred',
+            'message' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ], 500);
+    }
+});
+
+// Debug page for Steadfast API
+Route::get('/debug/steadfast-page', function () {
+    return view('debug.steadfast');
+});
+
+// Test parcel creation page
+Route::get('/test-parcel', function () {
+    $action = request('action');
+    $results = [];
+    
+    if ($action === 'config') {
+        // Check Steadfast configuration
+        try {
+            $courier = App\Models\Courier::where('courier_name', 'like', '%Steadfast%')->first();
+            
+            if (!$courier) {
+                $results['error'] = 'Steadfast Courier not found in database';
+            } else {
+                $apiService = new App\Services\SteadfastApiService($courier->api_key, $courier->api_secret);
+                $apiResult = $apiService->testConnection();
+                
+                $results = [
+                    'courier_info' => [
+                        'id' => $courier->id,
+                        'name' => $courier->courier_name,
+                        'api_endpoint' => $courier->api_endpoint,
+                        'has_api_key' => !empty($courier->api_key),
+                        'has_api_secret' => !empty($courier->api_secret),
+                        'status' => $courier->status
+                    ],
+                    'api_test' => $apiResult,
+                    'environment' => [
+                        'steadfast_enabled' => config('courier.steadfast.enabled'),
+                        'mock_in_local' => config('courier.steadfast.mock_in_local'),
+                        'base_url' => config('courier.steadfast.base_url'),
+                        'timeout' => config('courier.steadfast.timeout')
+                    ]
+                ];
+            }
+        } catch (Exception $e) {
+            $results['error'] = 'Exception occurred: ' . $e->getMessage();
+        }
+    } elseif ($action === 'run') {
+        // Run test parcel creation
+        try {
+            $courier = App\Models\Courier::where('courier_name', 'like', '%Steadfast%')->first();
+            
+            if (!$courier) {
+                $results['error'] = 'Steadfast Courier not found';
+            } else {
+                $merchant = App\Models\Merchant::first();
+                if (!$merchant) {
+                    $results['error'] = 'No merchant found';
+                } else {
+                    // Create a test parcel
+                    $testParcel = new App\Models\Parcel([
+                        'parcel_id' => 'TEST-' . time(),
+                        'customer_name' => 'Test Customer',
+                        'mobile_number' => '01700000000',
+                        'delivery_address' => 'Test Address, Dhaka 1205',
+                        'cod_amount' => 100,
+                        'merchant_id' => $merchant->id,
+                        'courier_id' => $courier->id,
+                        'status' => 'pending'
+                    ]);
+                    
+                    $testParcel->save();
+                    
+                    // Test API service
+                    $apiService = new App\Services\SteadfastApiService($courier->api_key, $courier->api_secret);
+                    $apiResult = $apiService->createOrder($testParcel);
+                    
+                    $results = [
+                        'test_parcel' => [
+                            'id' => $testParcel->id,
+                            'parcel_id' => $testParcel->parcel_id,
+                            'customer_name' => $testParcel->customer_name,
+                            'mobile_number' => $testParcel->mobile_number,
+                            'delivery_address' => $testParcel->delivery_address,
+                            'cod_amount' => $testParcel->cod_amount,
+                            'merchant_id' => $testParcel->merchant_id,
+                            'courier_id' => $testParcel->courier_id
+                        ],
+                        'api_result' => $apiResult,
+                        'message' => 'Test parcel creation completed'
+                    ];
+                }
+            }
+        } catch (Exception $e) {
+            $results['error'] = 'Test failed: ' . $e->getMessage();
+        }
+    }
+    
+    return view('debug.test-parcel', compact('action', 'results'));
+});
+
+// Test parcel creation API endpoint
+Route::get('/api/test-parcel', function () {
+    try {
+        $courier = App\Models\Courier::where('courier_name', 'like', '%Steadfast%')->first();
+        
+        if (!$courier) {
+            return response()->json(['error' => 'Steadfast Courier not found'], 404);
+        }
+        
+        // Get first merchant
+        $merchant = App\Models\Merchant::first();
+        if (!$merchant) {
+            return response()->json(['error' => 'No merchant found'], 404);
+        }
+        
+        // Create a test parcel
+        $testParcel = new App\Models\Parcel([
+            'parcel_id' => 'TEST-' . time(),
+            'customer_name' => 'Test Customer',
+            'mobile_number' => '01700000000',
+            'delivery_address' => 'Test Address, Dhaka 1205',
+            'cod_amount' => 100,
+            'merchant_id' => $merchant->id,
+            'courier_id' => $courier->id,
+            'status' => 'pending'
+        ]);
+        
+        $testParcel->save();
+        
+        // Test API service
+        $apiService = new App\Services\SteadfastApiService($courier->api_key, $courier->api_secret);
+        $result = $apiService->createOrder($testParcel);
+        
+        return response()->json([
+            'test_parcel' => [
+                'id' => $testParcel->id,
+                'parcel_id' => $testParcel->parcel_id,
+                'customer_name' => $testParcel->customer_name,
+                'mobile_number' => $testParcel->mobile_number,
+                'delivery_address' => $testParcel->delivery_address,
+                'cod_amount' => $testParcel->cod_amount,
+                'merchant_id' => $testParcel->merchant_id,
+                'courier_id' => $testParcel->courier_id
+            ],
+            'api_result' => $result,
+            'message' => 'Test parcel creation completed'
+        ]);
+        
+    } catch (Exception $e) {
+        return response()->json([
+            'error' => 'Test failed',
+            'message' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ], 500);
+    }
+});
+
 // Common authenticated routes
 Route::middleware(['auth'])->group(function () {
     // Profile routes

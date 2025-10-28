@@ -116,11 +116,12 @@ class ParcelController extends Controller
                     }
                 } catch (\Exception $e) {
                     \Log::error('Steadfast API error for parcel: ' . $parcel->parcel_id, [
-                        'error' => $e->getMessage()
+                        'error' => $e->getMessage(),
+                        'trace' => $e->getTraceAsString()
                     ]);
                     
                     return redirect()->route('admin.parcels.index')
-                        ->with('warning', 'Parcel created successfully, but courier API is temporarily unavailable.');
+                        ->with('warning', 'Parcel created successfully, but courier API error: ' . $e->getMessage());
                 }
             }
         }
