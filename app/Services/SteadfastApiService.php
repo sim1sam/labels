@@ -43,6 +43,20 @@ class SteadfastApiService
             ];
         }
         
+
+        // Check if Steadfast API is enabled
+        if (!config('courier.steadfast.enabled', true)) {
+            \Log::warning('Steadfast API is disabled', [
+                'parcel_id' => $parcel->parcel_id
+            ]);
+            
+            return [
+                'success' => false,
+                'message' => 'Steadfast API is disabled',
+                'data' => null
+            ];
+        }
+        
         try {
             // Validate required fields
             $recipientName = $parcel->receiver_name ?: $parcel->customer_name;
