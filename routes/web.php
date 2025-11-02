@@ -337,3 +337,9 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/test-connection/{courier}', [App\Http\Controllers\CourierApiController::class, 'testConnection']);
     });
 });
+
+// Public API routes for tracking (no authentication required)
+Route::prefix('api')->group(function () {
+    Route::get('/live-tracking/{parcel}', [App\Http\Controllers\CourierApiController::class, 'getLiveTracking']);
+    Route::get('/tracking/{parcel}', [App\Http\Controllers\CourierApiController::class, 'getTracking']);
+});

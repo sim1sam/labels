@@ -385,7 +385,8 @@ class SteadfastApiService
      */
     public function getTrackingStatus(string $trackingNumber): array
     {
-        if (config('courier.steadfast.mock_in_local') && app()->environment('local')) {
+        // Check if this is a mock/local tracking number
+        if (strpos($trackingNumber, 'LOCAL-') === 0 || strpos($trackingNumber, 'TEST-') === 0) {
             // Mock tracking data for local development
             $mockStatuses = ['pending', 'picked_up', 'in_transit', 'delivered'];
             $randomStatus = $mockStatuses[array_rand($mockStatuses)];

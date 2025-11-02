@@ -133,17 +133,22 @@ class Parcel extends Model
     // Check if parcel has tracking
     public function hasTracking(): bool
     {
-        return !empty($this->tracking_number) && !empty($this->courier_id);
+        return (!empty($this->tracking_number) || !empty($this->courier_tracking_number)) && !empty($this->courier_id);
     }
 
     // Get tracking URL
     public function getTrackingUrl(): ?string
     {
-        if (!$this->courier || !$this->tracking_number) {
+        if (!$this->courier) {
+            return null;
+        }
+        
+        $trackingNumber = $this->courier_tracking_number ?: $this->tracking_number;
+        if (!$trackingNumber) {
             return null;
         }
 
-        return $this->courier->getTrackingUrl($this->tracking_number);
+        return $this->courier->getTrackingUrl($trackingNumber);
     }
 
     // Update tracking history
