@@ -1,0 +1,23 @@
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    
+    # Prevent access to .env and other sensitive files
+    RewriteRule ^\.env$ - [F,L]
+    RewriteRule ^composer\.(json|lock)$ - [F,L]
+    RewriteRule ^package(-lock)?\.json$ - [F,L]
+    
+    # Redirect from /labels/public/ to /labels/ (remove public from URL)
+    RewriteCond %{THE_REQUEST} \s/labels/public/([^\s?]*) [NC]
+    RewriteRule ^ /labels/%1? [R=301,L]
+    
+    # Don't rewrite if the request is for an actual file or directory in root
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    
+    # Don't rewrite if already pointing to public directory (prevent loops)
+    RewriteCond %{REQUEST_URI} !^/labels/public/
+    RewriteCond %{REQUEST_URI} !^/public/
+    
+    # Internal rewrite to public directory (L flag = Last, no redirect)
+    RewriteRule ^(.*)$ public/$1 [L]
+</IfModule>

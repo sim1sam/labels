@@ -53,4 +53,23 @@ class Merchant extends Model
         
         return $merchantId;
     }
+
+    // Get logo URL (path-based, not storage link)
+    public function getLogoUrlAttribute()
+    {
+        if (!$this->logo) {
+            return null;
+        }
+
+        // If logo already starts with http, return as is
+        if (strpos($this->logo, 'http') === 0) {
+            return $this->logo;
+        }
+
+        // Remove leading slash if present to avoid double slashes
+        $logoPath = ltrim($this->logo, '/');
+        
+        // Return path-based URL (not storage link)
+        return url($logoPath);
+    }
 }

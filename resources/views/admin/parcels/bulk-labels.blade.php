@@ -171,16 +171,17 @@
         }
         
         .warning-icon {
-            width: 4mm;
-            height: 4mm;
-            background: #000;
-            color: white;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin-right: 1mm;
-            font-size: 6px;
+            width: 5mm;
+            height: 4.5mm;
+            margin-right: 2mm;
+            flex-shrink: 0;
+            display: inline-block;
+        }
+        
+        .warning-icon svg {
+            width: 100%;
+            height: 100%;
+            display: block;
         }
         
         @media print {
@@ -273,8 +274,8 @@
         <div class="label-container" style="page-break-after: always;">
             <!-- Header with Logo and Merchant Name -->
             <div class="header">
-                @if($parcel->merchant->logo)
-                    <img src="/{{ $parcel->merchant->logo }}" alt="Merchant Logo" class="logo merchant-logo">
+                @if($parcel->merchant->logo_url)
+                    <img src="{{ $parcel->merchant->logo_url }}" alt="Merchant Logo" class="logo merchant-logo">
                 @else
                     <div class="logo default-logo">
                         LOGO
@@ -317,7 +318,12 @@
             
             <!-- Disclaimer -->
             <div class="disclaimer">
-                <div class="warning-icon">!</div>
+                <div class="warning-icon">
+                    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12 2L2 22h20L12 2z" fill="none" stroke="#000" stroke-width="2" stroke-linejoin="round"/>
+                        <text x="12" y="15" font-size="16" font-weight="bold" fill="#000" text-anchor="middle" dominant-baseline="middle" font-family="Arial, sans-serif">!</text>
+                    </svg>
+                </div>
                 <div>Please make a 360-degree parcel opening video, otherwise no complain will be accepted.</div>
             </div>
         </div>

@@ -103,10 +103,10 @@
                                 <div style="color: #e53e3e; font-size: 14px; margin-top: 5px;">{{ $message }}</div>
                             @enderror
                             
-                            @if($merchant->logo)
+                            @if($merchant->logo_url)
                                 <div style="margin-top: 10px;">
                                     <label style="display: block; margin-bottom: 5px; font-weight: 600; color: #4a5568;">Current Logo:</label>
-                                    <img src="/{{ $merchant->logo }}" style="max-width: 150px; max-height: 150px; border-radius: 8px; border: 2px solid #e2e8f0;">
+                                    <img src="{{ $merchant->logo_url }}" style="max-width: 150px; max-height: 150px; border-radius: 8px; border: 2px solid #e2e8f0;">
                                 </div>
                             @endif
                             

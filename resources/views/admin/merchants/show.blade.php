@@ -56,8 +56,8 @@
                     <div>
                         <label style="display: block; margin-bottom: 5px; font-weight: 600; color: #4a5568;">Logo</label>
                         <div>
-                            @if($merchant->logo)
-                                <img src="/{{ $merchant->logo }}" alt="Merchant Logo" style="max-width: 80px; max-height: 80px; border-radius: 8px; border: 2px solid #e2e8f0;">
+                            @if($merchant->logo_url)
+                                <img src="{{ $merchant->logo_url }}" alt="Merchant Logo" style="max-width: 80px; max-height: 80px; border-radius: 8px; border: 2px solid #e2e8f0;">
                             @else
                                 <div style="width: 80px; height: 80px; background: #f7fafc; border: 2px dashed #cbd5e0; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #a0aec0;">
                                     <i class="fas fa-image" style="font-size: 24px;"></i>

@@ -531,9 +531,9 @@
                             <i class="fas fa-image"></i> Shop Logo
                         </label>
                         <div class="logo-upload">
-                            @if($merchant && $merchant->logo)
+                            @if($merchant && $merchant->logo_url)
                                 <div class="current-logo">
-                                    <img src="{{ asset($merchant->logo) }}" 
+                                    <img src="{{ $merchant->logo_url }}" 
                                          alt="Current Logo" 
                                          style="max-width: 150px; max-height: 150px;">
                                     <p>Current logo</p>
