@@ -342,6 +342,9 @@ class MerchantParcelController extends Controller
         $successCount = 0;
         $errorCount = 0;
         $errors = [];
+        $steadfastSuccessCount = 0;
+        $steadfastErrorCount = 0;
+        $steadfastErrors = [];
 
         foreach ($csvData as $index => $row) {
             try {
@@ -419,13 +422,11 @@ class MerchantParcelController extends Controller
                             $apiSecret = $merchantCourier ? ($merchantCourier->pivot->merchant_api_secret ?: $courier->api_secret) : $courier->api_secret;
                             
                             if (!empty($apiKey) && !empty($apiSecret)) {
-                                // Log API credentials being used
-                                \Log::info('Using API credentials for bulk parcel creation', [
-                                    'merchant_id' => $merchant->id,
+                                \Log::info('Bulk upload: Attempting Steadfast upload for parcel', [
+                                    'parcel_id' => $parcel->parcel_id,
                                     'courier_id' => $courier->id,
-                                    'api_key_source' => $merchantCourier && $merchantCourier->pivot->merchant_api_key ? 'merchant' : 'courier',
-                                    'api_key' => substr($apiKey, 0, 10) . '...',
-                                    'parcel_id' => $parcel->parcel_id
+                                    'merchant_id' => $merchant->id,
+                                    'api_key_source' => $merchantCourier && $merchantCourier->pivot->merchant_api_key ? 'merchant' : 'courier'
                                 ]);
                                 
                                 // Create Steadfast API service instance
@@ -446,19 +447,46 @@ class MerchantParcelController extends Controller
                                         'courier_tracking_number' => $result['data']['tracking_code'],
                                         'status' => $result['data']['status']
                                     ]);
+                                    
+                                    $steadfastSuccessCount++;
+                                    \Log::info('Bulk upload: Steadfast upload successful', [
+                                        'parcel_id' => $parcel->parcel_id,
+                                        'tracking_code' => $result['data']['tracking_code']
+                                    ]);
                                 } else {
                                     // Log error but don't fail the parcel creation
-                                    \Log::warning('Failed to create Steadfast order for parcel: ' . $parcel->parcel_id, [
-                                        'error' => $result['message']
+                                    $steadfastErrorCount++;
+                                    $steadfastErrors[] = "Parcel {$parcel->parcel_id}: " . $result['message'];
+                                    \Log::warning('Bulk upload: Failed to create Steadfast order for parcel: ' . $parcel->parcel_id, [
+                                        'error' => $result['message'],
+                                        'parcel_data' => [
+                                            'customer_name' => $parcel->customer_name,
+                                            'mobile_number' => $parcel->mobile_number
+                                        ]
                                     ]);
                                 }
+                            } else {
+                                \Log::warning('Bulk upload: Steadfast API credentials missing', [
+                                    'parcel_id' => $parcel->parcel_id,
+                                    'courier_id' => $courier->id,
+                                    'has_api_key' => !empty($apiKey),
+                                    'has_api_secret' => !empty($apiSecret)
+                                ]);
                             }
                         } catch (\Exception $e) {
                             // Log error but don't fail the parcel creation
-                            \Log::error('Steadfast API error for parcel: ' . $parcel->parcel_id, [
+                            $steadfastErrorCount++;
+                            $steadfastErrors[] = "Parcel {$parcel->parcel_id}: " . $e->getMessage();
+                            \Log::error('Bulk upload: Steadfast API error for parcel: ' . $parcel->parcel_id, [
                                 'error' => $e->getMessage()
                             ]);
                         }
+                    } else {
+                        \Log::info('Bulk upload: Courier has no API integration', [
+                            'parcel_id' => $parcel->parcel_id,
+                            'courier_id' => $courierId,
+                            'has_api_integration' => $courier ? $courier->hasApiIntegration() : false
+                        ]);
                     }
                 }
 
@@ -470,12 +498,32 @@ class MerchantParcelController extends Controller
             }
         }
 
+        $message = "Successfully created {$successCount} parcels from CSV file!";
+        if ($errorCount > 0) {
+            $message .= " {$errorCount} errors occurred.";
+        }
+        
+        // Add Steadfast upload summary
+        if ($steadfastSuccessCount > 0 || $steadfastErrorCount > 0) {
+            $message .= " | Steadfast: {$steadfastSuccessCount} uploaded";
+            if ($steadfastErrorCount > 0) {
+                $message .= ", {$steadfastErrorCount} failed";
+                if (!empty($steadfastErrors)) {
+                    $message .= " (" . implode('; ', array_slice($steadfastErrors, 0, 3));
+                    if (count($steadfastErrors) > 3) {
+                        $message .= " and " . (count($steadfastErrors) - 3) . " more";
+                    }
+                    $message .= ")";
+                }
+            }
+        }
+
         if ($errorCount > 0) {
             return back()->withErrors(['csv_file' => implode('; ', $errors)])
-                        ->with('success', "Successfully created {$successCount} parcels. {$errorCount} errors occurred.");
+                        ->with('success', $message);
         }
 
         return redirect()->route('merchant.parcels.index')
-                        ->with('success', "Successfully created {$successCount} parcels from CSV file!");
+                        ->with('success', $message);
     }
 }
