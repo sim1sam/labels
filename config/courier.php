@@ -15,6 +15,7 @@ return [
         'mock_in_local' => env('STEADFAST_MOCK_IN_LOCAL', true),
         'base_url' => env('STEADFAST_BASE_URL', 'https://portal.steadfast.com.bd/api/v1'),
         'timeout' => env('STEADFAST_TIMEOUT', 30),
+        'verify_ssl' => env('STEADFAST_VERIFY_SSL', true), // Set to false for local development if SSL cert issues
     ],
 
     'default' => [

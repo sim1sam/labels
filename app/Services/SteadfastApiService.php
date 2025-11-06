@@ -21,6 +21,40 @@ class SteadfastApiService
     }
 
     /**
+     * Build HTTP request with proper SSL verification settings
+     */
+    protected function buildHttpRequest()
+    {
+        $request = Http::withHeaders([
+            'Api-Key' => $this->apiKey,
+            'Secret-Key' => $this->secretKey,
+            'Content-Type' => 'application/json'
+        ]);
+
+        // Disable SSL verification if:
+        // 1. Explicitly configured to false in .env (STEADFAST_VERIFY_SSL=false)
+        // 2. Or in local environment (to avoid SSL certificate issues like cURL error 77)
+        $verifySsl = config('courier.steadfast.verify_ssl', true);
+        $isLocal = app()->environment('local');
+        
+        // In local environment, automatically disable SSL verification to avoid certificate file issues
+        // This fixes common errors like "cURL error 77: error setting certificate file"
+        if ($isLocal) {
+            $verifySsl = false;
+        }
+        
+        if (!$verifySsl) {
+            $request = $request->withoutVerifying();
+            \Log::info('SSL verification disabled for Steadfast API request', [
+                'environment' => app()->environment(),
+                'reason' => $isLocal ? 'local environment (auto-disabled)' : 'explicitly disabled in config'
+            ]);
+        }
+
+        return $request;
+    }
+
+    /**
      * Create order with Steadfast
      */
     public function createOrder(Parcel $parcel): array
@@ -63,6 +97,10 @@ class SteadfastApiService
             $recipientPhone = $parcel->receiver_phone ?: $parcel->mobile_number;
             $recipientAddress = $parcel->receiver_address ?: $parcel->delivery_address;
             
+            // Clean and format phone number for Steadfast API
+            // Remove spaces, parentheses, dashes, and other formatting characters
+            $recipientPhone = preg_replace('/[\s\(\)\-\.]/', '', $recipientPhone);
+            
             if (empty($recipientName) || empty($recipientPhone) || empty($recipientAddress)) {
                 return [
                     'success' => false,
@@ -87,18 +125,25 @@ class SteadfastApiService
                 $orderData['total_lot'] = (float) $parcel->weight;
             }
 
+            // Build HTTP request with SSL verification handling (must be done before logging)
+            $httpRequest = $this->buildHttpRequest();
+            $isLocal = app()->environment('local');
+            $verifySsl = !$isLocal && config('courier.steadfast.verify_ssl', true);
+            
             // Log the request data for debugging
             \Log::info('Steadfast API Request', [
                 'url' => $this->baseUrl . '/create_order',
                 'data' => $orderData,
-                'api_key' => substr($this->apiKey, 0, 10) . '...'
+                'api_key' => substr($this->apiKey, 0, 10) . '...',
+                'verify_ssl' => $verifySsl,
+                'environment' => app()->environment(),
+                'ssl_disabled_reason' => $isLocal ? 'local environment' : null
             ]);
 
-            $response = Http::withHeaders([
-                'Api-Key' => $this->apiKey,
-                'Secret-Key' => $this->secretKey,
-                'Content-Type' => 'application/json'
-            ])->timeout(config('courier.steadfast.timeout', 30))->post($this->baseUrl . '/create_order', $orderData);
+            // Make the API request
+            $response = $httpRequest
+                ->timeout(config('courier.steadfast.timeout', 30))
+                ->post($this->baseUrl . '/create_order', $orderData);
             
             // Log the response for debugging
             \Log::info('Steadfast API Response', [
@@ -109,41 +154,109 @@ class SteadfastApiService
             if ($response->successful()) {
                 $data = $response->json();
                 
-                if ($data['status'] == 200) {
+                // Check if response is valid JSON
+                if ($data === null) {
+                    \Log::error('Steadfast API Invalid JSON Response', [
+                        'status' => $response->status(),
+                        'body' => $response->body()
+                    ]);
+                    
+                    return [
+                        'success' => false,
+                        'message' => 'Invalid response from Steadfast API. Please check API configuration.',
+                        'data' => null
+                    ];
+                }
+                
+                // Check if status is 200 (success)
+                if (isset($data['status']) && $data['status'] == 200) {
+                    // Validate required fields in response
+                    if (!isset($data['consignment']) || !isset($data['consignment']['tracking_code'])) {
+                        \Log::error('Steadfast API Missing Required Fields', [
+                            'response' => $data
+                        ]);
+                        
+                        return [
+                            'success' => false,
+                            'message' => 'Invalid response structure from Steadfast API. Missing tracking code.',
+                            'data' => null
+                        ];
+                    }
+                    
                     // Update parcel with Steadfast tracking information
                     $parcel->update([
                         'courier_tracking_number' => $data['consignment']['tracking_code'],
-                        'status' => $this->mapStatus($data['consignment']['status'])
+                        'status' => $this->mapStatus($data['consignment']['status'] ?? 'pending')
                     ]);
 
                     return [
                         'success' => true,
-                        'message' => $data['message'],
+                        'message' => $data['message'] ?? 'Order created successfully',
                         'data' => [
-                            'consignment_id' => $data['consignment']['consignment_id'],
+                            'consignment_id' => $data['consignment']['consignment_id'] ?? null,
                             'tracking_code' => $data['consignment']['tracking_code'],
-                            'status' => $data['consignment']['status']
+                            'status' => $data['consignment']['status'] ?? 'pending'
                         ]
                     ];
                 } else {
-                    $errorMessage = $data['message'] ?? 'Unknown error';
-                    \Log::error('Steadfast API Error', [
-                        'status' => $data['status'] ?? 'unknown',
+                    // API returned error status
+                    $statusCode = $data['status'] ?? 'unknown';
+                    
+                    // Extract error message - Steadfast returns errors in different formats
+                    $errorMessage = 'Unknown error';
+                    if (isset($data['message'])) {
+                        $errorMessage = $data['message'];
+                    } elseif (isset($data['error'])) {
+                        $errorMessage = $data['error'];
+                    } elseif (isset($data['errors']) && is_array($data['errors'])) {
+                        // Steadfast returns validation errors in 'errors' array
+                        $errorMessages = [];
+                        foreach ($data['errors'] as $field => $messages) {
+                            if (is_array($messages)) {
+                                $errorMessages[] = ucfirst($field) . ': ' . implode(', ', $messages);
+                            } else {
+                                $errorMessages[] = ucfirst($field) . ': ' . $messages;
+                            }
+                        }
+                        $errorMessage = implode(' | ', $errorMessages);
+                    }
+                    
+                    \Log::error('Steadfast API Error Response', [
+                        'status' => $statusCode,
                         'message' => $errorMessage,
                         'full_response' => $data
                     ]);
                     
                     return [
                         'success' => false,
-                        'message' => 'Failed to create order: ' . $errorMessage,
+                        'message' => 'Steadfast API Error: ' . $errorMessage . ' (Status: ' . $statusCode . ')',
                         'data' => null
                     ];
                 }
             } else {
-                $errorMessage = 'HTTP ' . $response->status() . ': ' . $response->body();
+                // HTTP request failed
+                $statusCode = $response->status();
+                $responseBody = $response->body();
+                
+                // Try to parse error message from response
+                $errorMessage = 'HTTP ' . $statusCode;
+                try {
+                    $errorData = $response->json();
+                    if (isset($errorData['message'])) {
+                        $errorMessage .= ': ' . $errorData['message'];
+                    } elseif (isset($errorData['error'])) {
+                        $errorMessage .= ': ' . $errorData['error'];
+                    } else {
+                        $errorMessage .= ': ' . substr($responseBody, 0, 200);
+                    }
+                } catch (\Exception $e) {
+                    $errorMessage .= ': ' . substr($responseBody, 0, 200);
+                }
+                
                 \Log::error('Steadfast API HTTP Error', [
-                    'status' => $response->status(),
-                    'body' => $response->body()
+                    'status' => $statusCode,
+                    'body' => $responseBody,
+                    'headers' => $response->headers()
                 ]);
                 
                 return [
@@ -188,13 +301,11 @@ class SteadfastApiService
                 ];
             }
 
-            $response = Http::withHeaders([
-                'Api-Key' => $this->apiKey,
-                'Secret-Key' => $this->secretKey,
-                'Content-Type' => 'application/json'
-            ])->timeout(60)->post($this->baseUrl . '/create_order/bulk-order', [
-                'data' => json_encode($orders)
-            ]);
+            $response = $this->buildHttpRequest()
+                ->timeout(60)
+                ->post($this->baseUrl . '/create_order/bulk-order', [
+                    'data' => json_encode($orders)
+                ]);
 
             if ($response->successful()) {
                 $data = $response->json();
@@ -250,11 +361,9 @@ class SteadfastApiService
     public function getStatusByTrackingCode(string $trackingCode): array
     {
         try {
-            $response = Http::withHeaders([
-                'Api-Key' => $this->apiKey,
-                'Secret-Key' => $this->secretKey,
-                'Content-Type' => 'application/json'
-            ])->timeout(30)->get($this->baseUrl . '/status_by_trackingcode/' . $trackingCode);
+            $response = $this->buildHttpRequest()
+                ->timeout(30)
+                ->get($this->baseUrl . '/status_by_trackingcode/' . $trackingCode);
 
             if ($response->successful()) {
                 $data = $response->json();
@@ -289,11 +398,9 @@ class SteadfastApiService
     public function getStatusByInvoice(string $invoice): array
     {
         try {
-            $response = Http::withHeaders([
-                'Api-Key' => $this->apiKey,
-                'Secret-Key' => $this->secretKey,
-                'Content-Type' => 'application/json'
-            ])->timeout(30)->get($this->baseUrl . '/status_by_invoice/' . $invoice);
+            $response = $this->buildHttpRequest()
+                ->timeout(30)
+                ->get($this->baseUrl . '/status_by_invoice/' . $invoice);
 
             if ($response->successful()) {
                 $data = $response->json();
@@ -339,11 +446,9 @@ class SteadfastApiService
         }
         
         try {
-            $response = Http::withHeaders([
-                'Api-Key' => $this->apiKey,
-                'Secret-Key' => $this->secretKey,
-                'Content-Type' => 'application/json'
-            ])->timeout(config('courier.steadfast.timeout', 30))->get($this->baseUrl . '/get_balance');
+            $response = $this->buildHttpRequest()
+                ->timeout(config('courier.steadfast.timeout', 30))
+                ->get($this->baseUrl . '/get_balance');
 
             if ($response->successful()) {
                 $data = $response->json();
@@ -430,13 +535,11 @@ class SteadfastApiService
         }
 
         try {
-            $response = Http::withHeaders([
-                'Api-Key' => $this->apiKey,
-                'Secret-Key' => $this->secretKey,
-                'Content-Type' => 'application/json'
-            ])->timeout(30)->get($this->baseUrl . '/track', [
-                'tracking_code' => $trackingNumber
-            ]);
+            $response = $this->buildHttpRequest()
+                ->timeout(30)
+                ->get($this->baseUrl . '/track', [
+                    'tracking_code' => $trackingNumber
+                ]);
 
             if ($response->successful()) {
                 $data = $response->json();
@@ -479,11 +582,9 @@ class SteadfastApiService
     public function testConnection(): array
     {
         try {
-            $response = Http::withHeaders([
-                'Api-Key' => $this->apiKey,
-                'Secret-Key' => $this->secretKey,
-                'Content-Type' => 'application/json'
-            ])->timeout(10)->get($this->baseUrl . '/get_balance');
+            $response = $this->buildHttpRequest()
+                ->timeout(10)
+                ->get($this->baseUrl . '/get_balance');
 
             if ($response->successful()) {
                 $data = $response->json();

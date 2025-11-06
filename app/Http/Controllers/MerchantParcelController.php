@@ -134,12 +134,30 @@ class MerchantParcelController extends Controller
                         } else {
                             // Log error but don't fail the parcel creation
                             \Log::warning('Failed to create Steadfast order for parcel: ' . $parcel->parcel_id, [
-                                'error' => $result['message']
+                                'error' => $result['message'],
+                                'parcel_data' => [
+                                    'customer_name' => $parcel->customer_name,
+                                    'mobile_number' => $parcel->mobile_number,
+                                    'delivery_address' => $parcel->delivery_address
+                                ]
                             ]);
                             
+                            // Show actual error message from Steadfast API
+                            $errorMsg = $result['message'] ?? 'Unknown error occurred';
                             return redirect()->route('merchant.parcels.index')
-                                ->with('warning', 'Parcel created successfully, but failed to create order with ' . $courier->courier_name . '. Please try again later.');
+                                ->with('warning', 'Parcel created successfully, but failed to create order with ' . $courier->courier_name . '. Error: ' . $errorMsg);
                         }
+                    } else {
+                        // API credentials are missing
+                        \Log::warning('Steadfast API credentials missing for parcel: ' . $parcel->parcel_id, [
+                            'merchant_id' => $merchant->id,
+                            'courier_id' => $courier->id,
+                            'has_api_key' => !empty($apiKey),
+                            'has_api_secret' => !empty($apiSecret)
+                        ]);
+                        
+                        return redirect()->route('merchant.parcels.index')
+                            ->with('warning', 'Parcel created successfully, but Steadfast API credentials are not configured. Please configure API credentials in courier settings.');
                     }
                 } catch (\Exception $e) {
                     \Log::error('Steadfast API error for parcel: ' . $parcel->parcel_id, [
@@ -376,7 +394,7 @@ class MerchantParcelController extends Controller
                 );
 
                 // Create parcel
-                Parcel::create([
+                $parcel = Parcel::create([
                     'parcel_id' => Parcel::generateParcelId(),
                     'merchant_id' => $merchant->id,
                     'customer_name' => $customerName,
@@ -386,7 +404,63 @@ class MerchantParcelController extends Controller
                     'courier_id' => $courierId,
                     'status' => 'pending',
                     'created_by' => 'merchant',
+                    'tracking_number' => Parcel::generateTrackingNumber(),
                 ]);
+
+                // If courier is selected and has API integration, create order with courier
+                if ($courierId) {
+                    $courier = Courier::find($courierId);
+                    
+                    if ($courier && $courier->hasApiIntegration()) {
+                        try {
+                            // Get API credentials - first try merchant-specific, then courier defaults
+                            $merchantCourier = $merchant->couriers()->where('couriers.id', $courier->id)->first();
+                            $apiKey = $merchantCourier ? ($merchantCourier->pivot->merchant_api_key ?: $courier->api_key) : $courier->api_key;
+                            $apiSecret = $merchantCourier ? ($merchantCourier->pivot->merchant_api_secret ?: $courier->api_secret) : $courier->api_secret;
+                            
+                            if (!empty($apiKey) && !empty($apiSecret)) {
+                                // Log API credentials being used
+                                \Log::info('Using API credentials for bulk parcel creation', [
+                                    'merchant_id' => $merchant->id,
+                                    'courier_id' => $courier->id,
+                                    'api_key_source' => $merchantCourier && $merchantCourier->pivot->merchant_api_key ? 'merchant' : 'courier',
+                                    'api_key' => substr($apiKey, 0, 10) . '...',
+                                    'parcel_id' => $parcel->parcel_id
+                                ]);
+                                
+                                // Create Steadfast API service instance
+                                $steadfastService = new \App\Services\SteadfastApiService(
+                                    $apiKey,
+                                    $apiSecret
+                                );
+                                
+                                // Load merchant relationship for API call
+                                $parcel->load('merchant');
+                                
+                                // Create order with Steadfast
+                                $result = $steadfastService->createOrder($parcel);
+                                
+                                if ($result['success']) {
+                                    // Update parcel with Steadfast tracking info
+                                    $parcel->update([
+                                        'courier_tracking_number' => $result['data']['tracking_code'],
+                                        'status' => $result['data']['status']
+                                    ]);
+                                } else {
+                                    // Log error but don't fail the parcel creation
+                                    \Log::warning('Failed to create Steadfast order for parcel: ' . $parcel->parcel_id, [
+                                        'error' => $result['message']
+                                    ]);
+                                }
+                            }
+                        } catch (\Exception $e) {
+                            // Log error but don't fail the parcel creation
+                            \Log::error('Steadfast API error for parcel: ' . $parcel->parcel_id, [
+                                'error' => $e->getMessage()
+                            ]);
+                        }
+                    }
+                }
 
                 $successCount++;
 
