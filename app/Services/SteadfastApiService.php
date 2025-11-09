@@ -18,6 +18,14 @@ class SteadfastApiService
         $this->apiKey = $apiKey;
         $this->secretKey = $secretKey;
         $this->baseUrl = config('courier.steadfast.base_url', 'https://portal.steadfast.com.bd/api/v1');
+        
+        // Log API configuration for debugging (without sensitive data)
+        \Log::debug('SteadfastApiService initialized', [
+            'base_url' => $this->baseUrl,
+            'api_key_set' => !empty($this->apiKey),
+            'secret_key_set' => !empty($this->secretKey),
+            'environment' => app()->environment()
+        ]);
     }
 
     /**
@@ -28,12 +36,14 @@ class SteadfastApiService
         $request = Http::withHeaders([
             'Api-Key' => $this->apiKey,
             'Secret-Key' => $this->secretKey,
-            'Content-Type' => 'application/json'
+            'Content-Type' => 'application/json',
+            'Accept' => 'application/json'
         ]);
 
-        // Disable SSL verification if:
-        // 1. Explicitly configured to false in .env (STEADFAST_VERIFY_SSL=false)
-        // 2. Or in local environment (to avoid SSL certificate issues like cURL error 77)
+        // SSL verification settings:
+        // 1. Check explicit config (STEADFAST_VERIFY_SSL in .env)
+        // 2. In local environment, automatically disable to avoid certificate issues
+        // 3. In production, verify SSL by default unless explicitly disabled
         $verifySsl = config('courier.steadfast.verify_ssl', true);
         $isLocal = app()->environment('local');
         
@@ -43,11 +53,20 @@ class SteadfastApiService
             $verifySsl = false;
         }
         
+        // For production servers, if SSL verification fails, allow disabling it via config
+        // Some servers may have SSL certificate issues with external APIs
         if (!$verifySsl) {
             $request = $request->withoutVerifying();
             \Log::info('SSL verification disabled for Steadfast API request', [
                 'environment' => app()->environment(),
+                'base_url' => $this->baseUrl,
                 'reason' => $isLocal ? 'local environment (auto-disabled)' : 'explicitly disabled in config'
+            ]);
+        } else {
+            // Enable SSL verification for production
+            \Log::debug('SSL verification enabled for Steadfast API request', [
+                'environment' => app()->environment(),
+                'base_url' => $this->baseUrl
             ]);
         }
 

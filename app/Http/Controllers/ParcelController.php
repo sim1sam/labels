@@ -75,6 +75,19 @@ class ParcelController extends Controller
             $courier = Courier::find($request->courier_id);
             $merchant = Merchant::find($request->merchant_id);
             
+            // Log courier and API integration status for debugging
+            \Log::info('Parcel creation - Checking API integration', [
+                'parcel_id' => $parcel->parcel_id,
+                'courier_id' => $request->courier_id,
+                'merchant_id' => $request->merchant_id,
+                'courier_found' => $courier ? true : false,
+                'merchant_found' => $merchant ? true : false,
+                'has_api_integration' => $courier ? $courier->hasApiIntegration() : false,
+                'api_endpoint' => $courier ? $courier->api_endpoint : null,
+                'has_api_key' => $courier ? !empty($courier->api_key) : false,
+                'courier_name' => $courier ? $courier->courier_name : null
+            ]);
+            
             if ($courier && $courier->hasApiIntegration() && $merchant) {
                 try {
                     // Get API credentials - first try merchant-specific, then courier defaults
@@ -83,6 +96,14 @@ class ParcelController extends Controller
                     $apiSecret = $merchantCourier ? ($merchantCourier->pivot->merchant_api_secret ?: $courier->api_secret) : $courier->api_secret;
                     
                     if (!empty($apiKey) && !empty($apiSecret)) {
+                        \Log::info('Parcel creation - Calling Steadfast API', [
+                            'parcel_id' => $parcel->parcel_id,
+                            'courier_id' => $courier->id,
+                            'merchant_id' => $merchant->id,
+                            'api_key_source' => $merchantCourier && $merchantCourier->pivot->merchant_api_key ? 'merchant' : 'courier',
+                            'api_key_preview' => substr($apiKey, 0, 10) . '...'
+                        ]);
+                        
                         // Create Steadfast API service instance
                         $steadfastService = new \App\Services\SteadfastApiService(
                             $apiKey,
@@ -94,6 +115,12 @@ class ParcelController extends Controller
                         
                         // Create order with Steadfast
                         $result = $steadfastService->createOrder($parcel);
+                        
+                        \Log::info('Parcel creation - Steadfast API response', [
+                            'parcel_id' => $parcel->parcel_id,
+                            'success' => $result['success'],
+                            'message' => $result['message'] ?? 'No message'
+                        ]);
                         
                         if ($result['success']) {
                             // Update parcel with Steadfast tracking info
@@ -126,7 +153,12 @@ class ParcelController extends Controller
                             'merchant_id' => $merchant->id,
                             'courier_id' => $courier->id,
                             'has_api_key' => !empty($apiKey),
-                            'has_api_secret' => !empty($apiSecret)
+                            'has_api_secret' => !empty($apiSecret),
+                            'courier_api_key' => !empty($courier->api_key),
+                            'courier_api_secret' => !empty($courier->api_secret),
+                            'merchant_courier_found' => $merchantCourier ? true : false,
+                            'merchant_api_key' => $merchantCourier ? !empty($merchantCourier->pivot->merchant_api_key) : false,
+                            'merchant_api_secret' => $merchantCourier ? !empty($merchantCourier->pivot->merchant_api_secret) : false
                         ]);
                         
                         return redirect()->route('admin.parcels.index')
@@ -135,12 +167,26 @@ class ParcelController extends Controller
                 } catch (\Exception $e) {
                     \Log::error('Steadfast API error for parcel: ' . $parcel->parcel_id, [
                         'error' => $e->getMessage(),
-                        'trace' => $e->getTraceAsString()
+                        'trace' => $e->getTraceAsString(),
+                        'file' => $e->getFile(),
+                        'line' => $e->getLine()
                     ]);
                     
                     return redirect()->route('admin.parcels.index')
                         ->with('warning', 'Parcel created successfully, but courier API error: ' . $e->getMessage());
                 }
+            } else {
+                // Log why API integration is not being called
+                \Log::warning('Parcel created but API integration not called', [
+                    'parcel_id' => $parcel->parcel_id,
+                    'courier_id' => $request->courier_id,
+                    'courier_found' => $courier ? true : false,
+                    'merchant_found' => $merchant ? true : false,
+                    'has_api_integration' => $courier ? $courier->hasApiIntegration() : false,
+                    'api_endpoint' => $courier ? $courier->api_endpoint : null,
+                    'has_api_key' => $courier ? !empty($courier->api_key) : false,
+                    'courier_name' => $courier ? $courier->courier_name : null
+                ]);
             }
         }
 

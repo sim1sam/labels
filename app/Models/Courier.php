@@ -45,6 +45,15 @@ class Courier extends Model
     // Check if courier has API integration
     public function hasApiIntegration(): bool
     {
+        // For Steadfast, we can use config-based endpoint, so only api_key is required
+        $isSteadfast = stripos($this->courier_name, 'steadfast') !== false;
+        
+        if ($isSteadfast) {
+            // For Steadfast, only api_key is required (endpoint comes from config)
+            return !empty($this->api_key);
+        }
+        
+        // For other couriers, both endpoint and key are required
         return !empty($this->api_endpoint) && !empty($this->api_key);
     }
 

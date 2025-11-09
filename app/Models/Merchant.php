@@ -69,7 +69,8 @@ class Merchant extends Model
         // Remove leading slash if present to avoid double slashes
         $logoPath = ltrim($this->logo, '/');
         
-        // Return path-based URL (not storage link)
-        return url($logoPath);
+        // Use asset() helper for better server compatibility, especially with subdirectories
+        // This ensures the URL is correctly generated based on APP_URL
+        return asset($logoPath);
     }
 }

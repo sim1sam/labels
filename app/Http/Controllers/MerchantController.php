@@ -45,12 +45,22 @@ class MerchantController extends Controller
             'is_primary.*' => 'nullable|integer',
         ]);
 
-        // Handle logo upload
+        // Handle logo upload - pathwise storage (not storage link)
         $logoPath = null;
         if ($request->hasFile('logo')) {
             $logo = $request->file('logo');
             $logoName = time() . '_' . $logo->getClientOriginalName();
-            $logo->move(public_path('uploads/merchants'), $logoName);
+            
+            // Ensure directory exists
+            $uploadDir = public_path('uploads/merchants');
+            if (!file_exists($uploadDir)) {
+                mkdir($uploadDir, 0755, true);
+            }
+            
+            // Move file directly to public/uploads directory (pathwise)
+            $logo->move($uploadDir, $logoName);
+            
+            // Store relative path (without leading slash)
             $logoPath = 'uploads/merchants/' . $logoName;
         }
 
@@ -128,17 +138,30 @@ class MerchantController extends Controller
             'is_primary.*' => 'nullable|integer',
         ]);
 
-        // Handle logo upload
+        // Handle logo upload - pathwise storage (not storage link)
         $logoPath = $merchant->logo; // Keep existing logo if no new one uploaded
         if ($request->hasFile('logo')) {
             // Delete old logo if exists
-            if ($merchant->logo && file_exists(public_path($merchant->logo))) {
-                unlink(public_path($merchant->logo));
+            if ($merchant->logo) {
+                $oldLogoPath = public_path($merchant->logo);
+                if (file_exists($oldLogoPath)) {
+                    unlink($oldLogoPath);
+                }
             }
             
             $logo = $request->file('logo');
             $logoName = time() . '_' . $logo->getClientOriginalName();
-            $logo->move(public_path('uploads/merchants'), $logoName);
+            
+            // Ensure directory exists
+            $uploadDir = public_path('uploads/merchants');
+            if (!file_exists($uploadDir)) {
+                mkdir($uploadDir, 0755, true);
+            }
+            
+            // Move file directly to public/uploads directory (pathwise)
+            $logo->move($uploadDir, $logoName);
+            
+            // Store relative path (without leading slash)
             $logoPath = 'uploads/merchants/' . $logoName;
         }
 

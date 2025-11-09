@@ -98,25 +98,30 @@ class ProfileController extends Controller
         
         $user->save();
 
-        // Handle logo upload
+        // Handle logo upload - pathwise storage (not storage link)
         if ($request->hasFile('logo')) {
             // Delete old logo if exists
-            if ($merchant->logo && file_exists(public_path($merchant->logo))) {
-                unlink(public_path($merchant->logo));
+            if ($merchant->logo) {
+                $oldLogoPath = public_path($merchant->logo);
+                if (file_exists($oldLogoPath)) {
+                    unlink($oldLogoPath);
+                }
             }
             
             $logo = $request->file('logo');
             $logoName = time() . '_' . $logo->getClientOriginalName();
             
             // Create directory if it doesn't exist
-            $uploadDir = public_path('uploads/merchants/logos');
+            $uploadDir = public_path('uploads/merchants');
             if (!file_exists($uploadDir)) {
                 mkdir($uploadDir, 0755, true);
             }
             
-            // Move file to public directory
+            // Move file directly to public/uploads directory (pathwise)
             $logo->move($uploadDir, $logoName);
-            $merchant->logo = 'uploads/merchants/logos/' . $logoName;
+            
+            // Store relative path (without leading slash)
+            $merchant->logo = 'uploads/merchants/' . $logoName;
         }
 
         // Update merchant data
