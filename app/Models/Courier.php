@@ -50,11 +50,34 @@ class Courier extends Model
         
         if ($isSteadfast) {
             // For Steadfast, only api_key is required (endpoint comes from config)
-            return !empty($this->api_key);
+            $hasKey = !empty($this->api_key);
+            
+            // Log for debugging if key is missing
+            if (!$hasKey) {
+                \Log::warning('Steadfast courier missing API key', [
+                    'courier_id' => $this->id,
+                    'courier_name' => $this->courier_name,
+                    'api_key_set' => false
+                ]);
+            }
+            
+            return $hasKey;
         }
         
         // For other couriers, both endpoint and key are required
-        return !empty($this->api_endpoint) && !empty($this->api_key);
+        $hasEndpoint = !empty($this->api_endpoint);
+        $hasKey = !empty($this->api_key);
+        
+        if (!$hasEndpoint || !$hasKey) {
+            \Log::debug('Courier missing API configuration', [
+                'courier_id' => $this->id,
+                'courier_name' => $this->courier_name,
+                'has_endpoint' => $hasEndpoint,
+                'has_key' => $hasKey
+            ]);
+        }
+        
+        return $hasEndpoint && $hasKey;
     }
 
     // Check if courier supports tracking

@@ -46,6 +46,7 @@ class SteadfastApiService
         // 3. In production, verify SSL by default unless explicitly disabled
         $verifySsl = config('courier.steadfast.verify_ssl', true);
         $isLocal = app()->environment('local');
+        $appEnv = app()->environment();
         
         // In local environment, automatically disable SSL verification to avoid certificate file issues
         // This fixes common errors like "cURL error 77: error setting certificate file"
@@ -55,18 +56,21 @@ class SteadfastApiService
         
         // For production servers, if SSL verification fails, allow disabling it via config
         // Some servers may have SSL certificate issues with external APIs
+        // IMPORTANT: On production servers, if you get SSL errors, set STEADFAST_VERIFY_SSL=false in .env
         if (!$verifySsl) {
             $request = $request->withoutVerifying();
             \Log::info('SSL verification disabled for Steadfast API request', [
-                'environment' => app()->environment(),
+                'environment' => $appEnv,
                 'base_url' => $this->baseUrl,
-                'reason' => $isLocal ? 'local environment (auto-disabled)' : 'explicitly disabled in config'
+                'reason' => $isLocal ? 'local environment (auto-disabled)' : 'explicitly disabled in config',
+                'config_value' => config('courier.steadfast.verify_ssl')
             ]);
         } else {
             // Enable SSL verification for production
-            \Log::debug('SSL verification enabled for Steadfast API request', [
-                'environment' => app()->environment(),
-                'base_url' => $this->baseUrl
+            \Log::info('SSL verification enabled for Steadfast API request', [
+                'environment' => $appEnv,
+                'base_url' => $this->baseUrl,
+                'config_value' => config('courier.steadfast.verify_ssl')
             ]);
         }
 
@@ -78,10 +82,26 @@ class SteadfastApiService
      */
     public function createOrder(Parcel $parcel): array
     {
+        // Log environment and configuration for debugging
+        $appEnv = app()->environment();
+        $mockInLocal = config('courier.steadfast.mock_in_local', false);
+        $apiEnabled = config('courier.steadfast.enabled', true);
+        
+        \Log::info('Steadfast createOrder called', [
+            'parcel_id' => $parcel->parcel_id,
+            'app_environment' => $appEnv,
+            'mock_in_local' => $mockInLocal,
+            'api_enabled' => $apiEnabled,
+            'is_local_env' => $appEnv === 'local',
+            'should_mock' => $mockInLocal && $appEnv === 'local'
+        ]);
+        
         // Skip API calls in localhost/development environment if configured
-        if (config('courier.steadfast.mock_in_local') && app()->environment('local')) {
-            \Log::info('Skipping Steadfast API call in local environment', [
-                'parcel_id' => $parcel->parcel_id
+        // BUT only if explicitly set to mock AND environment is actually local
+        if ($mockInLocal && $appEnv === 'local') {
+            \Log::info('Skipping Steadfast API call in local environment (mock mode)', [
+                'parcel_id' => $parcel->parcel_id,
+                'environment' => $appEnv
             ]);
             
             // Return mock success response for localhost testing
@@ -98,14 +118,15 @@ class SteadfastApiService
         
 
         // Check if Steadfast API is enabled
-        if (!config('courier.steadfast.enabled', true)) {
-            \Log::warning('Steadfast API is disabled', [
-                'parcel_id' => $parcel->parcel_id
+        if (!$apiEnabled) {
+            \Log::warning('Steadfast API is disabled in configuration', [
+                'parcel_id' => $parcel->parcel_id,
+                'config_value' => config('courier.steadfast.enabled')
             ]);
             
             return [
                 'success' => false,
-                'message' => 'Steadfast API is disabled',
+                'message' => 'Steadfast API is disabled in configuration. Check STEADFAST_API_ENABLED in .env file.',
                 'data' => null
             ];
         }
@@ -159,15 +180,45 @@ class SteadfastApiService
                 'ssl_disabled_reason' => $isLocal ? 'local environment' : null
             ]);
 
-            // Make the API request
-            $response = $httpRequest
-                ->timeout(config('courier.steadfast.timeout', 30))
-                ->post($this->baseUrl . '/create_order', $orderData);
+            // Make the API request with error handling
+            try {
+                $response = $httpRequest
+                    ->timeout(config('courier.steadfast.timeout', 30))
+                    ->post($this->baseUrl . '/create_order', $orderData);
+            } catch (\Illuminate\Http\Client\ConnectionException $e) {
+                // Network/connection errors
+                \Log::error('Steadfast API Connection Error', [
+                    'parcel_id' => $parcel->parcel_id,
+                    'error' => $e->getMessage(),
+                    'url' => $this->baseUrl . '/create_order',
+                    'base_url' => $this->baseUrl
+                ]);
+                
+                return [
+                    'success' => false,
+                    'message' => 'Failed to connect to Steadfast API. Please check your server network connection and SSL configuration. Error: ' . $e->getMessage(),
+                    'data' => null
+                ];
+            } catch (\Exception $e) {
+                // Other exceptions
+                \Log::error('Steadfast API Request Exception', [
+                    'parcel_id' => $parcel->parcel_id,
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString()
+                ]);
+                
+                return [
+                    'success' => false,
+                    'message' => 'API request failed: ' . $e->getMessage(),
+                    'data' => null
+                ];
+            }
             
             // Log the response for debugging
             \Log::info('Steadfast API Response', [
+                'parcel_id' => $parcel->parcel_id,
                 'status' => $response->status(),
-                'body' => $response->body()
+                'body' => substr($response->body(), 0, 500) // Limit log size
             ]);
 
             if ($response->successful()) {

@@ -457,10 +457,17 @@ class ParcelController extends Controller
                             ]);
                         }
                     } else {
-                        \Log::info('Bulk upload: Courier has no API integration', [
+                        // Detailed logging to diagnose why API integration is not working
+                        \Log::warning('Bulk upload: Courier has no API integration', [
                             'parcel_id' => $parcel->parcel_id,
                             'courier_id' => $courierId,
-                            'has_api_integration' => $courier ? $courier->hasApiIntegration() : false
+                            'courier_found' => $courier ? true : false,
+                            'courier_name' => $courier ? $courier->courier_name : null,
+                            'has_api_integration' => $courier ? $courier->hasApiIntegration() : false,
+                            'api_key' => $courier ? (!empty($courier->api_key) ? 'SET (' . substr($courier->api_key, 0, 10) . '...)' : 'NOT SET') : 'COURIER NOT FOUND',
+                            'api_secret' => $courier ? (!empty($courier->api_secret) ? 'SET' : 'NOT SET') : 'COURIER NOT FOUND',
+                            'api_endpoint' => $courier ? ($courier->api_endpoint ?: 'NOT SET') : 'COURIER NOT FOUND',
+                            'is_steadfast' => $courier ? (stripos($courier->courier_name, 'steadfast') !== false) : false
                         ]);
                     }
                 }
